@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Travel {
+    id                String   @id @default(cuid())
+    startDateTime     DateTime
+    endDateTime       DateTime?
+    stationFrom       Station  @relation("stationFrom", fields: [stationFromNumber], references: [number], map: "Travel_stationFrom_fkey")
+    stationTo         Station? @relation("stationTo", fields: [stationToNumber], references: [number], map: "Travel_stationTo_fkey")
+    bike              Bike     @relation(fields: [bikeNumber], references: [number], map: "Travel_bike_fkey")
+
+    stationFromNumber Int
+    stationToNumber   Int?
+    bikeNumber        Int
+
+    @@index([stationFromNumber, stationToNumber])
+    @@index([stationToNumber, stationFromNumber])
+}
+
+model Station {
+    number      Int     @id
+    name        String
+    address     String
+    position    String
+    banking     Boolean
+    bonus       Boolean
+    status      String
+    connected   Boolean
+    totalStands Int
+    travelFrom  Travel[] @relation("stationFrom")
+    travelTo    Travel[] @relation("stationTo")
+    bikes       Bike[]
+
+    @@index([number])
+}
+
+model Bike {
+    number        Int      @id
+    type          String
+    status        String?
+    station       Station  @relation(fields: [stationNumber], references: [number], map: "Bike_station_fkey")
+    stationNumber Int
+
+    travel        Travel[]
+
+    @@index([stationNumber])
+}
