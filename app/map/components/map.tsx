@@ -1,7 +1,7 @@
 'use client'
 
 import { Station, Travel } from "@prisma/client";
-import { AdvancedMarker, Map, Marker, Pin } from "@vis.gl/react-google-maps";
+import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
 import Heatmap from "./heatmap";
 
 export const defaultMapContainerStyle = {
