@@ -2,7 +2,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 import requestHandler from './class/RequestHandler';
 import { PrismaClient, Bike as PrismaBike } from '@prisma/client';
-import { Bike } from './types/bike';
 
 const prisma = new PrismaClient();
 
@@ -41,7 +40,10 @@ async function updateStations() {
 }
 
 async function updateLiveStations() {
-    const liveStations = await fetch('https://api.jcdecaux.com/vls/v3/stations?apiKey=frifk0jbxfefqqniqez09tw4jvk37wyf823b5j1i&contract=lyon');
+    if (process.env.VELOV_API_KEY === undefined) {
+        throw new Error('VELOV_API_KEY is not defined');
+    }
+    const liveStations = await fetch(`https://api.jcdecaux.com/vls/v3/stations?apiKey=${process.env.VELOV_API_KEY}&contract=lyon`);
     const liveStationsData = await liveStations.json();
     for (const liveStation of liveStationsData) {
         liveUpdatedStations[liveStation.number] = true;
@@ -177,14 +179,14 @@ async function updateTravel(endStationNumber: number|null, bike: PrismaBike, lis
 
 
 await updateStations();
-updateBikes();
+await updateBikes();
 
 function startLoop() {
     setInterval(async () => {
         await updateStations();
     }, 12 * 60 * 60 * 1000);
     setInterval(async () => {
-        updateBikes();
+        await updateBikes();
     }, 0.5 * 60 * 1000);
 }
 

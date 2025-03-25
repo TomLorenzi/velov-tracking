@@ -9,8 +9,8 @@ class RequestHandler {
     }
 
     async handleRequest(url: string, options?: RequestInit): Promise<any> {
-        if (!process.env.VELOV_API_KEY) {
-            throw new Error('VELOV_API_KEY is not defined');
+        if (!process.env.CLICLOCITY_API_KEY) {
+            throw new Error('CLICLOCITY_API_KEY is not defined');
         }
         if (!this.accessToken) {
             await this.getToken();
