@@ -44,7 +44,7 @@ class RequestHandler {
             },
             body: JSON.stringify({
                 code: 'vls.web.lyon:PRD',
-                key: process.env.VELOV_API_KEY,
+                key: process.env.CLICLOCITY_API_KEY,
             }),
         });
 

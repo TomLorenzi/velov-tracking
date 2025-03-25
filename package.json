@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.5.0",
-    "@react-google-maps/api": "^2.20.6",
+    "@vis.gl/react-google-maps": "^1.5.2",
     "dotenv": "^16.4.7",
     "next": "15.2.3",
     "react": "^19.0.0",
