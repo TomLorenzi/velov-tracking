@@ -1,5 +1,3 @@
-'use client'
-
 import { Station, Travel } from "@prisma/client";
 import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
 import Heatmap from "./heatmap";
@@ -15,9 +13,10 @@ interface Props {
         [key: number]: Station;
     };
     travels: Travel[];
+    showStations: boolean;
 }
 
-const MapComponent = ({ stations, travels }: Props) => {
+const MapComponent = ({ stations, travels, showStations }: Props) => {
     return (
         <Map
             style={{width: '100vw', height: '80vh'}}
@@ -26,7 +25,7 @@ const MapComponent = ({ stations, travels }: Props) => {
             disableDefaultUI={true}
             mapId={process.env.NEXT_PUBLIC_GOOGLE_MAP_ID}
         >
-            {Object.values(stations).map((station, index) => (
+            {showStations && Object.values(stations).map((station, index) => (
                 <AdvancedMarker
                     position={{
                         lat: parseFloat(station.position.split(',')[0]),
@@ -37,7 +36,7 @@ const MapComponent = ({ stations, travels }: Props) => {
                     <img src="/map/pin.svg" alt="Pin" width={15} height={25} />
                 </AdvancedMarker>
             ))}
-            <Heatmap radius={20} opacity={0.6} travels={travels} stations={stations} />
+            <Heatmap radius={40} opacity={0.6} travels={travels} stations={stations} />
         </Map>
     )
 };

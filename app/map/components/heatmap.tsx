@@ -36,15 +36,23 @@ const Heatmap = ({radius, opacity, travels, stations}: HeatmapProps) => {
         });
 
         heatmap.setData(
-            filteredTravels.map(travel => {
+            filteredTravels.flatMap((travel) => {
                 const startStation = stations[travel.stationFromNumber];
                 const endStation = stations[travel.stationToNumber as number];
-                const [lat, lng] = startStation.position.split(',').map(parseFloat);
-
-                return {
-                    location: new google.maps.LatLng(lat, lng),
-                    weight: 1
-                };
+                const [startLlat, startLng] = startStation.position.split(',').map(parseFloat);
+                const [endLat, endLng] = endStation.position.split(',').map(parseFloat);
+                
+                
+                return [
+                    {
+                        location: new google.maps.LatLng(startLlat, startLng),
+                        weight: 1
+                    },
+                    {
+                        location: new google.maps.LatLng(endLat, endLng),
+                        weight: 1
+                    }
+                ];
             })
         );
     }, [heatmap, radius, opacity]);

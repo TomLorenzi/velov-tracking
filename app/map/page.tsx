@@ -1,11 +1,7 @@
-'use server';
-
-import { MapProvider } from "@/providers/map-provider";
-import { MapComponent } from "./components/map";
-import prisma from "@/lib/prisma";
 import { Station } from "@prisma/client";
+import prisma from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
-import { getTravels } from "./action";
+import { MapClient } from "./components/mapClient";
 
 const getStations = unstable_cache(
     async () => {
@@ -21,15 +17,15 @@ const getStations = unstable_cache(
     },
     ['stations'],
     { revalidate: 60 * 60 * 12, tags: ['stations'] }
-)
-  
-export default async function Map() {
+);
+
+async function getTravels() {
+    return await prisma.travel.findMany();
+}
+
+export default async function MapPage() {
     const stations = await getStations();
     const travels = await getTravels();
 
-    return (
-        <MapProvider>
-            <MapComponent stations={stations} travels={travels} />
-        </MapProvider>
-    )
+    return <MapClient stations={stations} travels={travels} />;
 }
