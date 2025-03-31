@@ -106,12 +106,12 @@ async function updateBikes() {
     }
     if (listBikesToUpdates.length) {
         console.log(`${listBikesToUpdates.length} bikes have changed location`);
-        for (const bike of listBikesToUpdates) {
-            await prisma.bike.update({
+        await prisma.$transaction([
+            ...listBikesToUpdates.map(bike => prisma.bike.update({
                 where: bike.where,
                 data: bike.data
-            });
-        }
+            }))
+        ]);
     }
     if (listBikesToInsert.length) {
         await prisma.bike.createMany({

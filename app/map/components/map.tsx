@@ -36,7 +36,7 @@ const MapComponent = ({ stations, travels, showStations }: Props) => {
                     <img src="/map/pin.svg" alt="Pin" width={15} height={25} />
                 </AdvancedMarker>
             ))}
-            <Heatmap radius={40} opacity={0.6} travels={travels} stations={stations} />
+            <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} />
         </Map>
     )
 };
