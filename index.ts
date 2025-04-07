@@ -13,28 +13,35 @@ async function updateStations() {
     for (const station of stations) {
         formattedStations[station.number] = station;
     }
-    const liveStations = await fetch('https://api.jcdecaux.com/vls/v3/stations?apiKey=frifk0jbxfefqqniqez09tw4jvk37wyf823b5j1i&contract=lyon');
-    const liveStationsData = await liveStations.json();
-    const listStationToInsert: any[] = [];
-    for (const liveStation of liveStationsData) {
-        if (formattedStations[liveStation.number]) {
-            continue;
+    try {
+        const liveStations = await fetch(`https://api.jcdecaux.com/vls/v3/stations?apiKey=${process.env.VELOV_API_KEY}&contract=lyon`);
+        const liveStationsData = await liveStations.json();
+        const listStationToInsert: any[] = [];
+        for (const liveStation of liveStationsData) {
+            if (formattedStations[liveStation.number]) {
+                continue;
+            }
+            listStationToInsert.push({
+                number: liveStation.number,
+                name: liveStation.name,
+                address: liveStation.address,
+                position: `${liveStation.position.latitude},${liveStation.position.longitude}`,
+                banking: liveStation.banking,
+                bonus: liveStation.bonus,
+                connected: liveStation.connected,
+                status: liveStation.status,
+                totalStands: liveStation.totalStands.capacity,
+            });
         }
-        listStationToInsert.push({
-            number: liveStation.number,
-            name: liveStation.name,
-            address: liveStation.address,
-            position: `${liveStation.position.latitude},${liveStation.position.longitude}`,
-            banking: liveStation.banking,
-            bonus: liveStation.bonus,
-            connected: liveStation.connected,
-            status: liveStation.status,
-            totalStands: liveStation.totalStands.capacity,
-        });
+        if (listStationToInsert.length) {
+            await prisma.station.createMany({
+                data: listStationToInsert
+            });
+        }
+    } catch (_) {
+        //TODO: log or smth
+        return;
     }
-    await prisma.station.createMany({
-        data: listStationToInsert
-    });
     await updateLiveStations();
     console.log('Stations updated');
 }
@@ -43,20 +50,30 @@ async function updateLiveStations() {
     if (process.env.VELOV_API_KEY === undefined) {
         throw new Error('VELOV_API_KEY is not defined');
     }
-    const liveStations = await fetch(`https://api.jcdecaux.com/vls/v3/stations?apiKey=${process.env.VELOV_API_KEY}&contract=lyon`);
-    const liveStationsData = await liveStations.json();
-    for (const liveStation of liveStationsData) {
-        liveUpdatedStations[liveStation.number] = true;
+    try {
+        const liveStations = await fetch(`https://api.jcdecaux.com/vls/v3/stations?apiKey=${process.env.VELOV_API_KEY}&contract=lyon`);
+        const liveStationsData = await liveStations.json();
+        for (const liveStation of liveStationsData) {
+            liveUpdatedStations[liveStation.number] = true;
+        }
+    } catch (_) {
+        //TODO: log or smth
+        return;
     }
 }
 
 async function updateBikes() {
-    const liveBikes = await requestHandler.handleRequest('https://api.cyclocity.fr/contracts/lyon/bikes', {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/vnd.bikes.v4+json'
-        }
-    });
+    let liveBikes = [];
+    try {
+        liveBikes = await requestHandler.handleRequest('https://api.cyclocity.fr/contracts/lyon/bikes', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/vnd.bikes.v4+json'
+            }
+        });
+    } catch (error) {
+        return;
+    }
     const storedBikes = await prisma.bike.findMany();
     const formattedBikes: any = {};
     for (const bike of storedBikes) {
@@ -104,35 +121,44 @@ async function updateBikes() {
             });
         }
     }
-    if (listBikesToUpdates.length) {
-        console.log(`${listBikesToUpdates.length} bikes have changed location`);
-        await prisma.$transaction([
-            ...listBikesToUpdates.map(bike => prisma.bike.update({
-                where: bike.where,
-                data: bike.data
-            }))
-        ]);
-    }
-    if (listBikesToInsert.length) {
-        await prisma.bike.createMany({
-            data: listBikesToInsert
-        });
+    try {
+        if (listBikesToUpdates.length) {
+            console.log(`${listBikesToUpdates.length} bikes have changed location`);
+            //This might take a long time is script wasn't running for some time, many bikes to updates
+            await prisma.$transaction([
+                ...listBikesToUpdates.map(bike => prisma.bike.update({
+                    where: bike.where,
+                    data: bike.data
+                }))
+            ]);
+        }
+        if (listBikesToInsert.length) {
+            await prisma.bike.createMany({
+                data: listBikesToInsert
+            });
+        }
+    } catch (error) {
+        return; //TODO: log or smth
     }
 
     console.log('Bikes updated');
 
-    if (listTravelToInsert.length) {
-        await prisma.travel.createMany({
-            data: listTravelToInsert
-        });
-    }
-    if (listTravelToUpdates.length) {
-        for (const travel of listTravelToUpdates) {
-            await prisma.travel.update({
-                where: travel.where,
-                data: travel.data
+    try {
+        if (listTravelToInsert.length) {
+            await prisma.travel.createMany({
+                data: listTravelToInsert
             });
         }
+        if (listTravelToUpdates.length) {
+            await prisma.$transaction([
+                ...listTravelToUpdates.map(travel => prisma.travel.update({
+                    where: travel.where,
+                    data: travel.data
+                }))
+            ]);
+        }
+    } catch (error) {
+        return; //TODO: log or smth
     }
 
     console.log('Travels updated');
@@ -177,7 +203,15 @@ async function updateTravel(endStationNumber: number|null, bike: PrismaBike, lis
     return [listTravelToInsert, listTravelToUpdates];
 }
 
+async function cleanUnfinishedTravels() {
+    await prisma.travel.deleteMany({
+        where: {
+            stationToNumber: null
+        }
+    });
+}
 
+await cleanUnfinishedTravels();
 await updateStations();
 await updateBikes();
 

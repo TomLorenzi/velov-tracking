@@ -25,7 +25,6 @@ async function getTravels() {
 
 export default async function MapPage() {
     const stations = await getStations();
-    const travels = await getTravels();
 
-    return <MapClient stations={stations} travels={travels} />;
+    return <MapClient stations={stations} />;
 }

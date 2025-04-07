@@ -3,6 +3,7 @@
 import {useEffect, useMemo} from 'react';
 import {useMap, useMapsLibrary} from '@vis.gl/react-google-maps';
 import { Station, Travel } from '@prisma/client';
+import { Option } from '@/components/ui/multi-select';
 
 type HeatmapProps = {
     radius: number;
@@ -10,10 +11,11 @@ type HeatmapProps = {
     travels: Travel[];
     stations: {
         [key: number]: Station;
-    }
+    };
+    stationFilters: Option[];
 };
 
-const Heatmap = ({radius, opacity, travels, stations}: HeatmapProps) => {
+const Heatmap = ({radius, opacity, travels, stations, stationFilters}: HeatmapProps) => {
     const map = useMap();
     const visualization = useMapsLibrary('visualization');
 
@@ -41,7 +43,23 @@ const Heatmap = ({radius, opacity, travels, stations}: HeatmapProps) => {
                 const endStation = stations[travel.stationToNumber as number];
                 const [startLlat, startLng] = startStation.position.split(',').map(parseFloat);
                 const [endLat, endLng] = endStation.position.split(',').map(parseFloat);
-                
+                if (stationFilters.length === 1) {
+                    if (stationFilters[0].value === 'stationFrom') {
+                        return [
+                            {
+                                location: new google.maps.LatLng(startLlat, startLng),
+                                weight: 1
+                            }
+                        ];
+                    } else if (stationFilters[0].value === 'stationTo') {
+                        return [
+                            {
+                                location: new google.maps.LatLng(endLat, endLng),
+                                weight: 1
+                            }
+                        ];
+                    }
+                }
                 
                 return [
                     {
@@ -55,7 +73,7 @@ const Heatmap = ({radius, opacity, travels, stations}: HeatmapProps) => {
                 ];
             })
         );
-    }, [heatmap, radius, opacity]);
+    }, [heatmap, radius, opacity, travels, stationFilters]);
 
     useEffect(() => {
         if (!heatmap) return;

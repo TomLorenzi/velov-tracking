@@ -1,6 +1,7 @@
 import { Station, Travel } from "@prisma/client";
 import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
 import Heatmap from "./heatmap";
+import { Option } from "@/components/ui/multi-select";
 
 export const defaultMapContainerStyle = {
     width: '100%',
@@ -14,9 +15,10 @@ interface Props {
     };
     travels: Travel[];
     showStations: boolean;
+    stationFilters: Option[];
 }
 
-const MapComponent = ({ stations, travels, showStations }: Props) => {
+const MapComponent = ({ stations, travels, showStations, stationFilters }: Props) => {
     return (
         <Map
             style={{width: '100vw', height: '80vh'}}
@@ -36,7 +38,7 @@ const MapComponent = ({ stations, travels, showStations }: Props) => {
                     <img src="/map/pin.svg" alt="Pin" width={15} height={25} />
                 </AdvancedMarker>
             ))}
-            <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} />
+            <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} stationFilters={stationFilters} />
         </Map>
     )
 };

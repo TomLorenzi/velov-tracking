@@ -25,8 +25,16 @@ class RequestHandler {
         });
 
         if (response.status === 401) {
+            console.log('Token expired');
             await this.getToken();
             return this.handleRequest(url, options);
+        }
+
+        if (response.status !== 200) {
+            //looks like the token is invalid but doesn't throw a 401
+            this.accessToken = undefined
+            this.refreshToken = undefined;
+            throw new Error(`Request failed with status ${response.status}`);
         }
 
         return response.json();
@@ -64,6 +72,7 @@ class RequestHandler {
             }),
         });
 
+        console.log((await response.json()));
         this.accessToken = (await response.json()).accessToken;
         this.refreshToken = undefined;
         this.clearTokenTimeout();
