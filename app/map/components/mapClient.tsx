@@ -2,7 +2,8 @@
 
 import { MapProvider } from "@/providers/map-provider";
 import { useEffect, useState } from "react";
-import { MapComponent } from "./map";
+import dynamic from 'next/dynamic';
+const MapComponent = dynamic(() => import('./map'), {ssr: false});
 import { Station, Travel } from "@prisma/client";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateRange } from "react-day-picker";
@@ -24,6 +25,7 @@ const MapClient = ({ stations }: Props) => {
     const [date, setDate] = useState<DateRange | undefined>();
     const [dateTimeStart, setDateTimeStart] = useState<Date | undefined>(new Date(new Date().setHours(8, 0, 0, 0)));
     const [dateTimeEnd, setDateTimeEnd] = useState<Date | undefined>(new Date(new Date().setHours(10, 0, 0, 0)));
+    const [stationSelectedNumber, setStationSelectedNumber] = useState<number | null>(null);
 
     const [formattedTimeRange, setFormattedTimeRange] = useState<{start: Date, end: Date} | undefined>(undefined);
 
@@ -59,7 +61,13 @@ const MapClient = ({ stations }: Props) => {
     return (
         <>
             <MapProvider>
-                <MapComponent stations={stations} travels={travels} showStations={showStations} stationFilters={stationFilters} />
+                <MapComponent stations={stations}
+                    travels={travels}
+                    showStations={showStations}
+                    stationFilters={stationFilters}
+                    selectedStationNumber={stationSelectedNumber}
+                    setStationSelectedNumber={setStationSelectedNumber}
+                />
             </MapProvider>
             <div className="p-4 flex space-x-2">
                 <div className="flex items-center space-x-2">

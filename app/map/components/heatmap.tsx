@@ -41,13 +41,13 @@ const Heatmap = ({radius, opacity, travels, stations, stationFilters}: HeatmapPr
             filteredTravels.flatMap((travel) => {
                 const startStation = stations[travel.stationFromNumber];
                 const endStation = stations[travel.stationToNumber as number];
-                const [startLlat, startLng] = startStation.position.split(',').map(parseFloat);
+                const [startLat, startLng] = startStation.position.split(',').map(parseFloat);
                 const [endLat, endLng] = endStation.position.split(',').map(parseFloat);
                 if (stationFilters.length === 1) {
                     if (stationFilters[0].value === 'stationFrom') {
                         return [
                             {
-                                location: new google.maps.LatLng(startLlat, startLng),
+                                location: new google.maps.LatLng(startLat, startLng),
                                 weight: 1
                             }
                         ];
@@ -63,7 +63,7 @@ const Heatmap = ({radius, opacity, travels, stations, stationFilters}: HeatmapPr
                 
                 return [
                     {
-                        location: new google.maps.LatLng(startLlat, startLng),
+                        location: new google.maps.LatLng(startLat, startLng),
                         weight: 1
                     },
                     {
