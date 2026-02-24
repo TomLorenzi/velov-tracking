@@ -11,7 +11,7 @@ import { DatePickerWithRange } from "./datepicker";
 import { fetchTravels } from "../actions";
 import MultipleSelector, { Option } from "@/components/ui/multi-select";
 import { TimePicker } from "@/components/ui/time-picker";
-import { X, Layers, Clock, MapPin, Flame, Home } from "lucide-react";
+import { X, Layers, Clock, MapPin, Flame, Home, Route } from "lucide-react";
 import Link from "next/link";
 
 interface Props {
@@ -23,6 +23,7 @@ interface Props {
 const MapClient = ({ stations }: Props) => {
     const [showStations, setShowStations] = useState(true);
     const [showHeatmap, setShowHeatmap] = useState(true);
+    const [showAllTrips, setShowAllTrips] = useState(false);
     const [timeRangeFilter, setTimeRangeFilter] = useState(false);
     const [travels, setTravels] = useState<Travel[]>([]);
     const [date, setDate] = useState<DateRange | undefined>();
@@ -72,6 +73,7 @@ const MapClient = ({ stations }: Props) => {
                     travels={travels}
                     showStations={showStations}
                     showHeatmap={showHeatmap}
+                    showAllTrips={showAllTrips}
                     stationFilters={stationFilters}
                     selectedStationNumber={stationSelectedNumber}
                     setStationSelectedNumber={setStationSelectedNumber}
@@ -108,6 +110,17 @@ const MapClient = ({ stations }: Props) => {
                         <Flame className="h-4 w-4 text-orange-500" />
                         <label htmlFor="heatmap" className="text-sm font-medium cursor-pointer select-none">
                             Heatmap
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="all-trips"
+                            checked={showAllTrips}
+                            onCheckedChange={(checked) => setShowAllTrips(checked !== 'indeterminate' ? checked : false)}
+                        />
+                        <Route className="h-4 w-4 text-blue-500" />
+                        <label htmlFor="all-trips" className="text-sm font-medium cursor-pointer select-none">
+                            Tous les trajets
                         </label>
                     </div>
                 </div>

@@ -7,7 +7,9 @@ import {limitTiltRange} from '@vis.gl/react-google-maps';
 import { MapViewState, PickingInfo } from "@deck.gl/core";
 import {IconLayer} from '@deck.gl/layers';
 import {TripsLayer} from '@deck.gl/geo-layers';
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+
+const DECK_STYLE: CSSProperties = {width: '100%', height: '100%', position: 'absolute', inset: '0'};
 
 interface Props {
     stations: {
@@ -16,6 +18,7 @@ interface Props {
     travels: Travel[];
     showStations: boolean;
     showHeatmap: boolean;
+    showAllTrips: boolean;
     stationFilters: Option[];
     selectedStationNumber: number | null;
     setStationSelectedNumber: (number: number | null) => void;
@@ -32,17 +35,43 @@ export default function MapComponent({
     travels,
     showStations,
     showHeatmap,
+    showAllTrips,
     stationFilters,
     selectedStationNumber,
     setStationSelectedNumber
 }: Props) {
+    // Workaround for luma.gl bug in @luma.gl/core 9.x:
+    // CanvasContext's ResizeObserver fires during WebGLDevice construction,
+    // before device.limits is populated (createDevice is async).
+    // We patch ResizeObserver to swallow that initial error; deck.gl will
+    // handle the resize properly once the device finishes initialising.
+    const [deckReady, setDeckReady] = useState(false);
+    useEffect(() => {
+        const OriginalRO = window.ResizeObserver;
+        window.ResizeObserver = class SafeResizeObserver extends OriginalRO {
+            constructor(callback: ResizeObserverCallback) {
+                super((entries, observer) => {
+                    try {
+                        callback(entries, observer);
+                    } catch {
+                        // Silently ignored — luma.gl will resize once the device is ready
+                    }
+                });
+            }
+        };
+        setDeckReady(true);
+        return () => {
+            window.ResizeObserver = OriginalRO;
+        };
+    }, []);
+
     const tripsData = useMemo(() => {
-        if (selectedStationNumber === null) return [];
+        if (!showAllTrips && selectedStationNumber === null) return [];
 
         // Aggregate trips by route (station pair) to count occurrences
         const routeMap: Record<string, { from: number; to: number; count: number }> = {};
         for (const travel of travels) {
-            if (![travel.stationFromNumber, travel.stationToNumber].includes(selectedStationNumber)) {
+            if (!showAllTrips && ![travel.stationFromNumber, travel.stationToNumber].includes(selectedStationNumber!)) {
                 continue;
             }
             const key = `${travel.stationFromNumber}->${travel.stationToNumber}`;
@@ -77,13 +106,13 @@ export default function MapComponent({
             });
         }
         return data;
-    }, [selectedStationNumber, travels, stations]);
+    }, [selectedStationNumber, showAllTrips, travels, stations]);
 
     // Animation loop for TripsLayer
     const [currentTime, setCurrentTime] = useState(0);
     const animationRef = useRef<number>(0);
     const LOOP_LENGTH = 100;
-    const ANIMATION_SPEED = 1;
+    const ANIMATION_SPEED = showAllTrips ? 0.3 : 1;
 
     useEffect(() => {
         if (tripsData.length === 0) return;
@@ -96,7 +125,7 @@ export default function MapComponent({
         };
         animationRef.current = requestAnimationFrame(animate);
         return () => cancelAnimationFrame(animationRef.current);
-    }, [tripsData]);
+    }, [tripsData, ANIMATION_SPEED]);
 
     const handleClick = useCallback((info: PickingInfo) => {
         if (info.object) {
@@ -128,7 +157,7 @@ export default function MapComponent({
                 const t = d.maxCount > 1 ? (d.count - 1) / (d.maxCount - 1) : 0;
                 return 2 + 10 * t;
             },
-            trailLength: 60,
+            trailLength: showAllTrips ? 10 : 60,
             currentTime,
             shadowEnabled: false,
             widthUnits: 'pixels' as const,
@@ -154,9 +183,13 @@ export default function MapComponent({
         return result;
     }, [stations, tripsData, showStations, currentTime]);
 
+    if (!deckReady) {
+        return <div style={DECK_STYLE} />;
+    }
+
     return (
         <DeckGL
-            style={{width: '100%', height: '100%', position: 'absolute', inset: '0'}}
+            style={DECK_STYLE}
             initialViewState={INITIAL_VIEW_STATE}
             layers={layers}
             controller={true}
