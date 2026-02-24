@@ -1,11 +1,13 @@
 import { Station, Travel } from "@prisma/client";
-import { AdvancedMarker, Map } from "@vis.gl/react-google-maps";
+import { Map } from "@vis.gl/react-google-maps";
 import Heatmap from "./heatmap";
 import { Option } from "@/components/ui/multi-select";
 import {DeckGL} from '@deck.gl/react';
 import {limitTiltRange} from '@vis.gl/react-google-maps';
-import { MapViewState } from "@deck.gl/core";
-import {ArcLayer, IconLayer} from '@deck.gl/layers';
+import { MapViewState, PickingInfo } from "@deck.gl/core";
+import {IconLayer} from '@deck.gl/layers';
+import {TripsLayer} from '@deck.gl/geo-layers';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface Props {
     stations: {
@@ -13,6 +15,7 @@ interface Props {
     };
     travels: Travel[];
     showStations: boolean;
+    showHeatmap: boolean;
     stationFilters: Option[];
     selectedStationNumber: number | null;
     setStationSelectedNumber: (number: number | null) => void;
@@ -28,59 +31,113 @@ export default function MapComponent({
     stations,
     travels,
     showStations,
+    showHeatmap,
     stationFilters,
     selectedStationNumber,
     setStationSelectedNumber
 }: Props) {
-    const arcData: any[] = [];
-
-    if (selectedStationNumber !== null) {
+    const tripsData = useMemo(() => {
+        if (selectedStationNumber === null) return [];
+        const data: { path: [number, number][]; timestamps: number[] }[] = [];
         for (const travel of travels) {
             const startStation = stations[travel.stationFromNumber];
             const endStation = stations[travel.stationToNumber as number];
-            if (![travel.startDateTime, travel.stationToNumber].includes(selectedStationNumber)) {
+            if (![travel.stationFromNumber, travel.stationToNumber].includes(selectedStationNumber)) {
                 continue;
             }
+            if (!startStation || !endStation) continue;
             const [startLat, startLng] = startStation.position.split(',').map(parseFloat);
             const [endLat, endLng] = endStation.position.split(',').map(parseFloat);
-            arcData.push({
-                from: {
-                    coordinates: [startLng, startLat]
-                },
-                to: {
-                    coordinates: [endLng, endLat]
-                }
+            // Create intermediate points for a smoother path
+            const midLng = (startLng + endLng) / 2;
+            const midLat = (startLat + endLat) / 2;
+            data.push({
+                path: [
+                    [startLng, startLat],
+                    [midLng, midLat],
+                    [endLng, endLat],
+                ],
+                timestamps: [0, 50, 100],
             });
         }
-    }
+        return data;
+    }, [selectedStationNumber, travels, stations]);
 
-    const stationLayer = new IconLayer({
-        id: 'IconLayer',
-        data: Object.values(stations),
-        getPosition: (d: Station) => [parseFloat(d.position.split(',')[1]), parseFloat(d.position.split(',')[0])],
-        getIcon: () => './map/pin.svg',
-        pickable: true
-    });
+    // Animation loop for TripsLayer
+    const [currentTime, setCurrentTime] = useState(0);
+    const animationRef = useRef<number>(0);
+    const LOOP_LENGTH = 100;
+    const ANIMATION_SPEED = 1;
 
-    const arcLayer = new ArcLayer({
-        id: 'ArcLayer',
-        data: arcData,
-        getSourceColor: [0, 128, 255],
-        getTargetColor: [255, 0, 0],
-        getSourcePosition: d => d.from.coordinates,
-        getTargetPosition: d => d.to.coordinates,
-        getWidth: 1,
-    });
+    useEffect(() => {
+        if (tripsData.length === 0) return;
+        let startTimestamp: number;
+        const animate = (timestamp: number) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const elapsed = timestamp - startTimestamp;
+            setCurrentTime((elapsed * ANIMATION_SPEED * 0.06) % LOOP_LENGTH);
+            animationRef.current = requestAnimationFrame(animate);
+        };
+        animationRef.current = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animationRef.current);
+    }, [tripsData]);
 
-    const layers = [arcLayer, stationLayer];
+    const handleClick = useCallback((info: PickingInfo) => {
+        if (info.object) {
+            setStationSelectedNumber((info.object as Station).number);
+        } else {
+            setStationSelectedNumber(null);
+        }
+    }, [setStationSelectedNumber]);
+
+    const getCursor = useCallback(({isHovering}: {isHovering: boolean}) => {
+        return isHovering ? 'pointer' : 'grab';
+    }, []);
+
+    const layers = useMemo(() => {
+        const result = [];
+
+        const tripsLayer = new TripsLayer({
+            id: 'TripsLayer',
+            data: tripsData,
+            getPath: (d: { path: [number, number][] }) => d.path,
+            getTimestamps: (d: { timestamps: number[] }) => d.timestamps,
+            getColor: [253, 128, 93],
+            getWidth: 6,
+            trailLength: 60,
+            currentTime,
+            shadowEnabled: false,
+        });
+        result.push(tripsLayer);
+
+        if (showStations) {
+            const stationLayer = new IconLayer({
+                id: 'IconLayer',
+                data: Object.values(stations),
+                getPosition: (d: Station) => [parseFloat(d.position.split(',')[1]), parseFloat(d.position.split(',')[0])],
+                getIcon: () => ({
+                    url: './map/pin.svg',
+                    width: 64,
+                    height: 64,
+                }),
+                getSize: 30,
+                pickable: true,
+            });
+            result.push(stationLayer);
+        }
+
+        return result;
+    }, [stations, tripsData, showStations, currentTime]);
 
     return (
         <DeckGL
-            style={{width: '100vw', height: '80vh', position: 'relative'}}
+            style={{width: '100%', height: '100%', position: 'absolute', inset: '0'}}
             initialViewState={INITIAL_VIEW_STATE}
             layers={layers}
             controller={true}
             onViewStateChange={limitTiltRange}
+            onClick={handleClick}
+            getCursor={getCursor}
         >
             <Map
                 disableDefaultUI={true}
@@ -88,20 +145,9 @@ export default function MapComponent({
                 defaultCenter={{ lat: 45.767736, lng: 4.832114 }}
                 mapId={process.env.NEXT_PUBLIC_GOOGLE_MAP_ID}
             >
-                {/*showStations && Object.values(stations).map((station, index) => (
-                    <AdvancedMarker
-                        position={{
-                            lat: parseFloat(station.position.split(',')[0]),
-                            lng: parseFloat(station.position.split(',')[1])
-                        }}
-                        key={index}
-                        clickable
-                        onClick={() => setStationSelectedNumber(station.number)}
-                    >
-                        <img src="/map/pin.svg" alt="Pin" width={15} height={25} />
-                    </AdvancedMarker>
-                ))*/}
-                <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} stationFilters={stationFilters} />
+                {showHeatmap && (
+                    <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} stationFilters={stationFilters} />
+                )}
             </Map>
         </DeckGL>
     )

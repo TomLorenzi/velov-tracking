@@ -1,16 +1,17 @@
 class RequestHandler {
     private accessToken?: string;
     private refreshToken?: string;
-
-    private tokenExpirationTime: number;
+    private tokenExpirationTimer?: ReturnType<typeof setTimeout>;
+    private readonly tokenExpirationTime: number;
+    private static readonly MAX_RETRIES = 1;
 
     constructor() {
         this.tokenExpirationTime = 60 * 60 * 1000;
     }
 
-    async handleRequest(url: string, options?: RequestInit): Promise<any> {
-        if (!process.env.CLICLOCITY_API_KEY) {
-            throw new Error('CLICLOCITY_API_KEY is not defined');
+    async handleRequest(url: string, options?: RequestInit, retryCount = 0): Promise<unknown> {
+        if (!process.env.NEXT_PUBLIC_CLICLOCITY_API_KEY) {
+            throw new Error('NEXT_PUBLIC_CLICLOCITY_API_KEY is not defined');
         }
         if (!this.accessToken) {
             await this.getToken();
@@ -25,14 +26,19 @@ class RequestHandler {
         });
 
         if (response.status === 401) {
-            console.log('Token expired');
+            if (retryCount >= RequestHandler.MAX_RETRIES) {
+                throw new Error('Authentication failed after retry — aborting to prevent infinite loop');
+            }
+            console.log('Token expired, refreshing...');
+            this.accessToken = undefined;
+            this.refreshToken = undefined;
             await this.getToken();
-            return this.handleRequest(url, options);
+            return this.handleRequest(url, options, retryCount + 1);
         }
 
         if (response.status !== 200) {
             //looks like the token is invalid but doesn't throw a 401
-            this.accessToken = undefined
+            this.accessToken = undefined;
             this.refreshToken = undefined;
             throw new Error(`Request failed with status ${response.status}`);
         }
@@ -40,7 +46,7 @@ class RequestHandler {
         return response.json();
     }
 
-    async getToken() {
+    async getToken(): Promise<void> {
         if (this.refreshToken) {
             await this.refreshLastToken();
             return;
@@ -52,16 +58,21 @@ class RequestHandler {
             },
             body: JSON.stringify({
                 code: 'vls.web.lyon:PRD',
-                key: process.env.CLICLOCITY_API_KEY,
+                key: process.env.NEXT_PUBLIC_CLICLOCITY_API_KEY,
             }),
         });
+
+        if (!response.ok) {
+            throw new Error(`Failed to get token: ${response.status}`);
+        }
 
         const data = await response.json();
         this.accessToken = data.accessToken;
         this.refreshToken = data.refreshToken;
+        this.scheduleTokenExpiration();
     }
 
-    async refreshLastToken() {
+    async refreshLastToken(): Promise<void> {
         const response = await fetch('https://api.cyclocity.fr/auth/access_tokens', {
             method: 'POST',
             headers: {
@@ -72,14 +83,25 @@ class RequestHandler {
             }),
         });
 
-        console.log((await response.json()));
-        this.accessToken = (await response.json()).accessToken;
+        if (!response.ok) {
+            // Refresh failed — clear tokens so getToken() will do a full auth next time
+            this.accessToken = undefined;
+            this.refreshToken = undefined;
+            throw new Error(`Failed to refresh token: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Token refreshed:', data);
+        this.accessToken = data.accessToken;
         this.refreshToken = undefined;
-        this.clearTokenTimeout();
+        this.scheduleTokenExpiration();
     }
 
-    async clearTokenTimeout() {
-        setTimeout(() => {
+    private scheduleTokenExpiration(): void {
+        if (this.tokenExpirationTimer) {
+            clearTimeout(this.tokenExpirationTimer);
+        }
+        this.tokenExpirationTimer = setTimeout(() => {
             this.accessToken = undefined;
         }, this.tokenExpirationTime);
     }

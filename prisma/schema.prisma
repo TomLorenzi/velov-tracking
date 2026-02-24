@@ -43,8 +43,6 @@ model Station {
     travelFrom  Travel[] @relation("stationFrom")
     travelTo    Travel[] @relation("stationTo")
     bikes       Bike[]
-
-    @@index([number])
 }
 
 model Bike {

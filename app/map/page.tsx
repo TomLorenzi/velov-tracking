@@ -19,10 +19,6 @@ const getStations = unstable_cache(
     { revalidate: 60 * 60 * 12, tags: ['stations'] }
 );
 
-async function getTravels() {
-    return await prisma.travel.findMany();
-}
-
 export default async function MapPage() {
     const stations = await getStations();
 

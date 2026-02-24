@@ -11,6 +11,7 @@ import { DatePickerWithRange } from "./datepicker";
 import { fetchTravels } from "../actions";
 import MultipleSelector, { Option } from "@/components/ui/multi-select";
 import { TimePicker } from "@/components/ui/time-picker";
+import { X, Layers, Clock, MapPin, Flame } from "lucide-react";
 
 interface Props {
     stations: {
@@ -19,7 +20,8 @@ interface Props {
 }
 
 const MapClient = ({ stations }: Props) => {
-    const [showStations, setShowStations] = useState(false);
+    const [showStations, setShowStations] = useState(true);
+    const [showHeatmap, setShowHeatmap] = useState(true);
     const [timeRangeFilter, setTimeRangeFilter] = useState(false);
     const [travels, setTravels] = useState<Travel[]>([]);
     const [date, setDate] = useState<DateRange | undefined>();
@@ -58,63 +60,129 @@ const MapClient = ({ stations }: Props) => {
 
     const [stationFilters, setStationFilters] = useState<Option[]>(OPTIONS);
 
+    const selectedStation = stationSelectedNumber !== null ? stations[stationSelectedNumber] : null;
+
     return (
-        <>
+        <div className="relative w-screen h-screen overflow-hidden">
+            {/* Map - full screen */}
             <MapProvider>
-                <MapComponent stations={stations}
+                <MapComponent
+                    stations={stations}
                     travels={travels}
                     showStations={showStations}
+                    showHeatmap={showHeatmap}
                     stationFilters={stationFilters}
                     selectedStationNumber={stationSelectedNumber}
                     setStationSelectedNumber={setStationSelectedNumber}
                 />
             </MapProvider>
-            <div className="p-4 flex space-x-2">
-                <div className="flex items-center space-x-2">
-                    <Checkbox id='stations'
-                        onCheckedChange={(checked) => setShowStations(checked !== 'indeterminate' ? checked : true)}
-                    />
-                    <label
-                        htmlFor="stations"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                        Stations
-                    </label>
+
+            {/* Top-left: layer toggles */}
+            <div className="absolute top-4 left-4 z-50 flex flex-col gap-2">
+                <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 flex flex-col gap-3">
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="stations"
+                            checked={showStations}
+                            onCheckedChange={(checked) => setShowStations(checked !== 'indeterminate' ? checked : true)}
+                        />
+                        <MapPin className="h-4 w-4 text-zinc-500" />
+                        <label htmlFor="stations" className="text-sm font-medium cursor-pointer select-none">
+                            Stations
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="heatmap"
+                            checked={showHeatmap}
+                            onCheckedChange={(checked) => setShowHeatmap(checked !== 'indeterminate' ? checked : true)}
+                        />
+                        <Flame className="h-4 w-4 text-orange-500" />
+                        <label htmlFor="heatmap" className="text-sm font-medium cursor-pointer select-none">
+                            Heatmap
+                        </label>
+                    </div>
                 </div>
-                <DatePickerWithRange date={date} setDate={setDate} />
-                <MultipleSelector defaultOptions={OPTIONS} value={stationFilters} onChange={(options) => setStationFilters(options)} />
             </div>
-            <div className="px-4 flex space-x-2 items-center">
-                <div className="flex space-x-2">
-                    <Checkbox id='time-range-filter'
+
+            {/* Top-center: filters bar */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
+                <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 flex items-center gap-3">
+                    <DatePickerWithRange date={date} setDate={setDate} />
+                    <div className="w-px h-8 bg-zinc-200 dark:bg-zinc-700" />
+                    <MultipleSelector
+                        defaultOptions={OPTIONS}
+                        value={stationFilters}
+                        onChange={(options) => setStationFilters(options)}
+                    />
+                </div>
+            </div>
+
+            {/* Bottom-left: time range filter */}
+            <div className="absolute bottom-4 left-4 z-50">
+                <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 flex items-center gap-3">
+                    <Checkbox
+                        id="time-range-filter"
+                        checked={timeRangeFilter}
                         onCheckedChange={(checked) => setTimeRangeFilter(checked !== 'indeterminate' ? checked : true)}
                     />
-                    <label
-                        htmlFor="stations"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                    >
-                        Filtrer un créneau horaire
+                    <Clock className="h-4 w-4 text-zinc-500" />
+                    <label htmlFor="time-range-filter" className="text-sm font-medium cursor-pointer select-none whitespace-nowrap">
+                        Créneau horaire
                     </label>
+                    {timeRangeFilter && (
+                        <>
+                            <div className="w-px h-8 bg-zinc-200 dark:bg-zinc-700" />
+                            <span className="text-xs text-zinc-500">De</span>
+                            <TimePicker date={dateTimeStart} setDate={setDateTimeStart} />
+                            <span className="text-xs text-zinc-500">à</span>
+                            <TimePicker date={dateTimeEnd} setDate={setDateTimeEnd} />
+                        </>
+                    )}
                 </div>
-                {timeRangeFilter && 
-                    <>
-                        <span>|</span>
-                        <label
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                            Depuis
-                        </label>
-                        <TimePicker date={dateTimeStart} setDate={setDateTimeStart} />
-                        <label
-                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                        >
-                            Jusqu'à
-                        </label>
-                        <TimePicker date={dateTimeEnd} setDate={setDateTimeEnd} />
-                    </>
-                }
             </div>
-        </>
+
+            {/* Bottom-right: selected station info */}
+            {selectedStation && (
+                <div className="absolute bottom-4 right-4 z-50 max-w-xs">
+                    <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                        <div className="flex items-start justify-between gap-2">
+                            <div>
+                                <h3 className="font-semibold text-sm">{selectedStation.name}</h3>
+                                <p className="text-xs text-zinc-500 mt-0.5">{selectedStation.address}</p>
+                            </div>
+                            <button
+                                onClick={() => setStationSelectedNumber(null)}
+                                className="p-1 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-3 mt-3 text-xs text-zinc-600 dark:text-zinc-400">
+                            <div className="flex items-center gap-1">
+                                <Layers className="h-3 w-3" />
+                                <span>{selectedStation.totalStands} places</span>
+                            </div>
+                            <div className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                                selectedStation.status === 'OPEN'
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                            }`}>
+                                {selectedStation.status === 'OPEN' ? 'Ouverte' : 'Fermée'}
+                            </div>
+                        </div>
+                        {travels.length > 0 && (
+                            <p className="text-xs text-zinc-500 mt-2">
+                                {travels.filter(t =>
+                                    t.stationFromNumber === stationSelectedNumber ||
+                                    t.stationToNumber === stationSelectedNumber
+                                ).length} trajets liés
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 

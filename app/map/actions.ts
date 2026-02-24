@@ -2,6 +2,7 @@
 
 import { Travel } from "@prisma/client";
 import { DateRange } from "react-day-picker";
+import prisma from "@/lib/prisma";
 
 export async function fetchTravels(date: DateRange | undefined, formattedTimeRange: { start: Date, end: Date } | undefined) {
     let listTravels: Travel[] = [];
