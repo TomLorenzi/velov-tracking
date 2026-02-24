@@ -38,17 +38,31 @@ export default function MapComponent({
 }: Props) {
     const tripsData = useMemo(() => {
         if (selectedStationNumber === null) return [];
-        const data: { path: [number, number][]; timestamps: number[] }[] = [];
+
+        // Aggregate trips by route (station pair) to count occurrences
+        const routeMap: Record<string, { from: number; to: number; count: number }> = {};
         for (const travel of travels) {
-            const startStation = stations[travel.stationFromNumber];
-            const endStation = stations[travel.stationToNumber as number];
             if (![travel.stationFromNumber, travel.stationToNumber].includes(selectedStationNumber)) {
                 continue;
             }
+            const key = `${travel.stationFromNumber}->${travel.stationToNumber}`;
+            if (routeMap[key]) {
+                routeMap[key].count++;
+            } else {
+                routeMap[key] = { from: travel.stationFromNumber, to: travel.stationToNumber as number, count: 1 };
+            }
+        }
+
+        const routes = Object.values(routeMap);
+        const maxCount = Math.max(1, ...routes.map(r => r.count));
+
+        const data: { path: [number, number][]; timestamps: number[]; count: number; maxCount: number }[] = [];
+        for (const route of routes) {
+            const startStation = stations[route.from];
+            const endStation = stations[route.to];
             if (!startStation || !endStation) continue;
             const [startLat, startLng] = startStation.position.split(',').map(parseFloat);
             const [endLat, endLng] = endStation.position.split(',').map(parseFloat);
-            // Create intermediate points for a smoother path
             const midLng = (startLng + endLng) / 2;
             const midLat = (startLat + endLat) / 2;
             data.push({
@@ -58,6 +72,8 @@ export default function MapComponent({
                     [endLng, endLat],
                 ],
                 timestamps: [0, 50, 100],
+                count: route.count,
+                maxCount,
             });
         }
         return data;
@@ -100,13 +116,22 @@ export default function MapComponent({
         const tripsLayer = new TripsLayer({
             id: 'TripsLayer',
             data: tripsData,
-            getPath: (d: { path: [number, number][] }) => d.path,
-            getTimestamps: (d: { timestamps: number[] }) => d.timestamps,
-            getColor: [253, 128, 93],
-            getWidth: 6,
+            getPath: (d: { path: [number, number][]; count: number }) => d.path,
+            getTimestamps: (d: { timestamps: number[]; count: number }) => d.timestamps,
+            // Color gradient: low count = yellow [255,255,100], high count = red [253,50,30]
+            getColor: (d: { count: number; maxCount: number }) => {
+                const t = d.maxCount > 1 ? (d.count - 1) / (d.maxCount - 1) : 0;
+                return [253, Math.round(255 - 205 * t), Math.round(100 - 70 * t)];
+            },
+            // Width: 2px min for 1 trip, up to 12px for the most frequent route
+            getWidth: (d: { count: number; maxCount: number }) => {
+                const t = d.maxCount > 1 ? (d.count - 1) / (d.maxCount - 1) : 0;
+                return 2 + 10 * t;
+            },
             trailLength: 60,
             currentTime,
             shadowEnabled: false,
+            widthUnits: 'pixels' as const,
         });
         result.push(tripsLayer);
 

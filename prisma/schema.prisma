@@ -56,3 +56,10 @@ model Bike {
 
     @@index([stationNumber])
 }
+
+model Statistic {
+    key       String   @id
+    value     String
+    label     String
+    updatedAt DateTime @updatedAt
+}

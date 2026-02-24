@@ -11,7 +11,8 @@ import { DatePickerWithRange } from "./datepicker";
 import { fetchTravels } from "../actions";
 import MultipleSelector, { Option } from "@/components/ui/multi-select";
 import { TimePicker } from "@/components/ui/time-picker";
-import { X, Layers, Clock, MapPin, Flame } from "lucide-react";
+import { X, Layers, Clock, MapPin, Flame, Home } from "lucide-react";
+import Link from "next/link";
 
 interface Props {
     stations: {
@@ -79,6 +80,13 @@ const MapClient = ({ stations }: Props) => {
 
             {/* Top-left: layer toggles */}
             <div className="absolute top-4 left-4 z-50 flex flex-col gap-2">
+                <Link
+                    href="/"
+                    className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 flex items-center gap-2 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                >
+                    <Home className="h-4 w-4" />
+                    <span className="text-sm font-medium">Accueil</span>
+                </Link>
                 <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 flex flex-col gap-3">
                     <div className="flex items-center gap-2">
                         <Checkbox

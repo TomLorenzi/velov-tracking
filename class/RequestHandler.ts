@@ -10,8 +10,8 @@ class RequestHandler {
     }
 
     async handleRequest(url: string, options?: RequestInit, retryCount = 0): Promise<unknown> {
-        if (!process.env.NEXT_PUBLIC_CLICLOCITY_API_KEY) {
-            throw new Error('NEXT_PUBLIC_CLICLOCITY_API_KEY is not defined');
+        if (!process.env.CLICLOCITY_API_KEY) {
+            throw new Error('CLICLOCITY_API_KEY is not defined');
         }
         if (!this.accessToken) {
             await this.getToken();
@@ -58,7 +58,7 @@ class RequestHandler {
             },
             body: JSON.stringify({
                 code: 'vls.web.lyon:PRD',
-                key: process.env.NEXT_PUBLIC_CLICLOCITY_API_KEY,
+                key: process.env.CLICLOCITY_API_KEY,
             }),
         });
 

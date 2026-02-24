@@ -44,11 +44,11 @@ function delay(ms: number): Promise<void> {
 // --- Station logic ---
 
 async function fetchLiveStationsData(): Promise<any[]> {
-  if (!process.env.NEXT_PUBLIC_VELOV_API_KEY) {
-    throw new Error("NEXT_PUBLIC_VELOV_API_KEY is not defined");
+  if (!process.env.VELOV_API_KEY) {
+    throw new Error("VELOV_API_KEY is not defined");
   }
   const response = await fetch(
-    `https://api.jcdecaux.com/vls/v3/stations?apiKey=${process.env.NEXT_PUBLIC_VELOV_API_KEY}&contract=lyon`
+    `https://api.jcdecaux.com/vls/v3/stations?apiKey=${process.env.VELOV_API_KEY}&contract=lyon`
   );
   if (!response.ok) {
     throw new Error(`JCDecaux API returned status ${response.status}`);
@@ -149,8 +149,20 @@ async function updateBikes(): Promise<void> {
     where: { stationToNumber: null },
   });
   const unfinishedTravelsByBike: Record<number, Travel> = {};
+  const now = new Date();
+  const MAX_TRAVEL_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
+  const staleIds: string[] = [];
   for (const travel of unfinishedTravels) {
-    unfinishedTravelsByBike[travel.bikeNumber] = travel;
+    if (now.getTime() - travel.startDateTime.getTime() > MAX_TRAVEL_DURATION_MS) {
+      staleIds.push(travel.id);
+      delete trackingBikes[travel.bikeNumber];
+    } else {
+      unfinishedTravelsByBike[travel.bikeNumber] = travel;
+    }
+  }
+  if (staleIds.length) {
+    await prisma.travel.deleteMany({ where: { id: { in: staleIds } } });
+    console.log(`Deleted ${staleIds.length} stale travels (>6h)`);
   }
 
   const bikesToInsert: { number: number; type: string; stationNumber: number }[] = [];
@@ -175,7 +187,7 @@ async function updateBikes(): Promise<void> {
     }
 
     if (bikeCache[bike.number] !== undefined) {
-      if (bike.status === "RENTED") {
+      if (bike.status === "RENTED" && !trackingBikes[bike.number]) {
         // Bike just rented → start a new travel
         startTravel(bikeCache[bike.number], travelInserts);
       } else if (bike.status === "AVAILABLE" && bikeCache[bike.number].stationNumber !== bike.stationNumber) {
