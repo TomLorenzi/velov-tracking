@@ -5,7 +5,7 @@ import { Option } from "@/components/ui/multi-select";
 import {DeckGL} from '@deck.gl/react';
 import {limitTiltRange} from '@vis.gl/react-google-maps';
 import { MapViewState } from "@deck.gl/core";
-import {ArcLayer} from '@deck.gl/layers';
+import {ArcLayer, IconLayer} from '@deck.gl/layers';
 
 interface Props {
     stations: {
@@ -54,6 +54,14 @@ export default function MapComponent({
         }
     }
 
+    const stationLayer = new IconLayer({
+        id: 'IconLayer',
+        data: Object.values(stations),
+        getPosition: (d: Station) => [parseFloat(d.position.split(',')[1]), parseFloat(d.position.split(',')[0])],
+        getIcon: () => './map/pin.svg',
+        pickable: true
+    });
+
     const arcLayer = new ArcLayer({
         id: 'ArcLayer',
         data: arcData,
@@ -64,11 +72,11 @@ export default function MapComponent({
         getWidth: 1,
     });
 
-    const layers = [arcLayer];
+    const layers = [arcLayer, stationLayer];
 
     return (
         <DeckGL
-            style={{width: '100vw', height: '80vh', position: 'relative', pointerEvents: 'none'}}
+            style={{width: '100vw', height: '80vh', position: 'relative'}}
             initialViewState={INITIAL_VIEW_STATE}
             layers={layers}
             controller={true}
@@ -80,7 +88,7 @@ export default function MapComponent({
                 defaultCenter={{ lat: 45.767736, lng: 4.832114 }}
                 mapId={process.env.NEXT_PUBLIC_GOOGLE_MAP_ID}
             >
-                {showStations && Object.values(stations).map((station, index) => (
+                {/*showStations && Object.values(stations).map((station, index) => (
                     <AdvancedMarker
                         position={{
                             lat: parseFloat(station.position.split(',')[0]),
@@ -92,7 +100,7 @@ export default function MapComponent({
                     >
                         <img src="/map/pin.svg" alt="Pin" width={15} height={25} />
                     </AdvancedMarker>
-                ))}
+                ))*/}
                 <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} stationFilters={stationFilters} />
             </Map>
         </DeckGL>
