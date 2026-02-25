@@ -72,23 +72,24 @@ async function computeStatistics() {
         LIMIT 1
     `;
 
-    // Busiest hour of departure
+    // Busiest hour of departure (Lyon time)
     const busiestHour = await prisma.$queryRaw<
         { hour: number; h_count: bigint }[]
     >`
-        SELECT EXTRACT(HOUR FROM "startDateTime") AS hour, COUNT(*) AS h_count
+        SELECT EXTRACT(HOUR FROM "startDateTime" AT TIME ZONE 'Europe/Paris') AS hour, COUNT(*) AS h_count
         FROM "Travel"
         GROUP BY hour
         ORDER BY h_count DESC
         LIMIT 1
     `;
 
-    // Travels today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const travelsToday = await prisma.travel.count({
-        where: { startDateTime: { gte: today } },
-    });
+    // Travels today (Lyon time)
+    const travelsToday = await prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*) AS count
+        FROM "Travel"
+        WHERE ("startDateTime" AT TIME ZONE 'Europe/Paris')::date = (NOW() AT TIME ZONE 'Europe/Paris')::date
+    `;
+    const travelsTodayCount = Number(travelsToday[0]?.count ?? 0);
 
     // Most common route (pair of stations)
     const mostCommonRoute = await prisma.$queryRaw<
@@ -149,7 +150,7 @@ async function computeStatistics() {
         },
         {
             key: "travels_today",
-            value: travelsToday.toLocaleString("fr-FR"),
+            value: travelsTodayCount.toLocaleString("fr-FR"),
             label: "Trajets aujourd'hui",
         },
     ];

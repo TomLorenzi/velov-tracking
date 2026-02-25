@@ -16,8 +16,8 @@ datasource db {
 
 model Travel {
     id                String   @id @default(cuid())
-    startDateTime     DateTime
-    endDateTime       DateTime?
+    startDateTime     DateTime @db.Timestamptz()
+    endDateTime       DateTime? @db.Timestamptz()
     stationFrom       Station  @relation("stationFrom", fields: [stationFromNumber], references: [number], map: "Travel_stationFrom_fkey")
     stationTo         Station? @relation("stationTo", fields: [stationToNumber], references: [number], map: "Travel_stationTo_fkey")
     bike              Bike     @relation(fields: [bikeNumber], references: [number], map: "Travel_bike_fkey")
@@ -61,5 +61,5 @@ model Statistic {
     key       String   @id
     value     String
     label     String
-    updatedAt DateTime @updatedAt
+    updatedAt DateTime @updatedAt @db.Timestamptz()
 }
