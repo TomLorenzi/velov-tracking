@@ -73,7 +73,7 @@ const Heatmap = ({radius, opacity, travels, stations, stationFilters}: HeatmapPr
                 ];
             })
         );
-    }, [heatmap, radius, opacity, travels, stationFilters]);
+    }, [heatmap, radius, opacity, travels, stationFilters, stations]);
 
     useEffect(() => {
         if (!heatmap) return;

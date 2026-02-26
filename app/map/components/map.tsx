@@ -7,9 +7,9 @@ import {limitTiltRange} from '@vis.gl/react-google-maps';
 import { MapViewState, PickingInfo } from "@deck.gl/core";
 import {IconLayer} from '@deck.gl/layers';
 import {TripsLayer} from '@deck.gl/geo-layers';
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const DECK_STYLE: CSSProperties = {width: '100%', height: '100%', position: 'absolute', inset: '0'};
+const DECK_STYLE = {width: '100%', height: '100%', position: 'absolute' as const, inset: '0'};
 
 interface Props {
     stations: {
@@ -181,7 +181,7 @@ export default function MapComponent({
         }
 
         return result;
-    }, [stations, tripsData, showStations, currentTime]);
+    }, [stations, tripsData, showStations, currentTime, showAllTrips]);
 
     if (!deckReady) {
         return <div style={DECK_STYLE} />;

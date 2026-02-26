@@ -2,9 +2,9 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies + tsx
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN npm install && npm install --save-dev tsx
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma
@@ -17,4 +17,4 @@ COPY lib ./lib
 COPY types ./types
 COPY tsconfig.json ./
 
-CMD ["npx", "ts-node", "--esm", "index.ts"]
+CMD ["npx", "tsx", "index.ts"]

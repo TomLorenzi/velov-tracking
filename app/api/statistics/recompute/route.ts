@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 async function computeStatistics() {
     // Total counts
-    const [totalTravels, totalBikes, totalStations] = await Promise.all([
+    const [, totalBikes, totalStations] = await Promise.all([
         prisma.travel.count(),
         prisma.bike.count(),
         prisma.station.count(),
