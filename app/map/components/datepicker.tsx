@@ -1,8 +1,8 @@
 "use client"
 
-import { format } from "date-fns"
+import { format, addDays } from "date-fns"
 import { CalendarIcon } from "lucide-react"
-import { DateRange } from "react-day-picker"
+import { DateRange, Matcher } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -17,14 +17,25 @@ import { fr } from "date-fns/locale";
 interface Props {
     date: DateRange | undefined
     setDate: (date: DateRange | undefined) => void
+    maxDays?: number
     className?: string
 }
 
 export function DatePickerWithRange({
     date,
     setDate,
+    maxDays,
     className
 }: Props) {
+
+    // When from is selected but to is not yet, disable dates outside the allowed range
+    const disabledDays: Matcher[] = [];
+    if (maxDays && date?.from && !date?.to) {
+        disabledDays.push(
+            { after: addDays(date.from, maxDays - 1) },
+            { before: addDays(date.from, -(maxDays - 1)) }
+        );
+    }
 
     return (
         <div className={cn("grid gap-2", className)}>
@@ -61,7 +72,13 @@ export function DatePickerWithRange({
                         selected={date}
                         onSelect={setDate}
                         numberOfMonths={2}
+                        disabled={disabledDays}
                     />
+                    {maxDays && (
+                        <p className="text-xs text-zinc-500 text-center pb-2">
+                            {maxDays} jours maximum
+                        </p>
+                    )}
                 </PopoverContent>
             </Popover>
         </div>

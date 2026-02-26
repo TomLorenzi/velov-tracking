@@ -28,6 +28,8 @@ model Travel {
 
     @@index([stationFromNumber, stationToNumber])
     @@index([stationToNumber, stationFromNumber])
+    @@index([startDateTime])
+    @@index([endDateTime])
 }
 
 model Station {

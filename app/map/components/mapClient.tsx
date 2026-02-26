@@ -14,6 +14,31 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { X, Layers, Clock, MapPin, Flame, Home, Route } from "lucide-react";
 import Link from "next/link";
 
+const MAX_RANGE_DAYS = 7;
+
+function getDefaultDateRange(): DateRange {
+    const now = new Date();
+    const from = new Date(now);
+    from.setDate(from.getDate() - (MAX_RANGE_DAYS - 1));
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(now);
+    to.setHours(23, 59, 59, 999);
+    return { from, to };
+}
+
+function clampDateRange(range: DateRange | undefined): DateRange | undefined {
+    if (!range?.from) return range;
+    const from = range.from;
+    if (!range.to) return range;
+    const maxTo = new Date(from);
+    maxTo.setDate(maxTo.getDate() + MAX_RANGE_DAYS - 1);
+    maxTo.setHours(23, 59, 59, 999);
+    if (range.to > maxTo) {
+        return { from, to: maxTo };
+    }
+    return range;
+}
+
 interface Props {
     stations: {
         [key: number]: Station;
@@ -26,7 +51,7 @@ const MapClient = ({ stations }: Props) => {
     const [showAllTrips, setShowAllTrips] = useState(false);
     const [timeRangeFilter, setTimeRangeFilter] = useState(false);
     const [travels, setTravels] = useState<Travel[]>([]);
-    const [date, setDate] = useState<DateRange | undefined>();
+    const [date, setDate] = useState<DateRange | undefined>(getDefaultDateRange());
     const [dateTimeStart, setDateTimeStart] = useState<Date | undefined>(new Date(new Date().setHours(8, 0, 0, 0)));
     const [dateTimeEnd, setDateTimeEnd] = useState<Date | undefined>(new Date(new Date().setHours(10, 0, 0, 0)));
     const [stationSelectedNumber, setStationSelectedNumber] = useState<number | null>(null);
@@ -129,7 +154,7 @@ const MapClient = ({ stations }: Props) => {
             {/* Top-center: filters bar */}
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
                 <div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-700 p-3 flex items-center gap-3">
-                    <DatePickerWithRange date={date} setDate={setDate} />
+                    <DatePickerWithRange date={date} setDate={(d) => setDate(clampDateRange(d))} maxDays={MAX_RANGE_DAYS} />
                     <div className="w-px h-8 bg-zinc-200 dark:bg-zinc-700" />
                     <MultipleSelector
                         defaultOptions={OPTIONS}
