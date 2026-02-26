@@ -1,6 +1,5 @@
 'use server'
 
-import { Travel } from "@prisma/client";
 import { DateRange } from "react-day-picker";
 import prisma from "@/lib/prisma";
 import { unstable_cache } from "next/cache";
@@ -34,16 +33,6 @@ function clampDateRange(date: DateRange | undefined): { from: Date; to: Date } {
     }
 
     return { from, to };
-}
-
-function getCacheKey(from: Date, to: Date): string {
-    return `${from.toISOString()}_${to.toISOString()}`;
-}
-
-function isRangeInPast(to: Date): boolean {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return to < today;
 }
 
 const queryTravels = unstable_cache(
