@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/statistics/recompute",
-      "schedule": "0 * * * *"
+      "schedule": "0 1 * * *"
     }
   ]
 }
