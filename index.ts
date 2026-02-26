@@ -27,6 +27,29 @@ interface TravelUpdate {
   data: { stationToNumber: number; endDateTime: Date };
 }
 
+// --- Discord webhook ---
+
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+
+async function sendDiscordMessage(content: string): Promise<void> {
+  if (!DISCORD_WEBHOOK_URL) {
+    console.warn("DISCORD_WEBHOOK_URL not set, skipping notification");
+    return;
+  }
+  try {
+    const res = await fetch(DISCORD_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (!res.ok) {
+      console.error(`Discord webhook returned ${res.status}`);
+    }
+  } catch (e) {
+    console.error("Failed to send Discord message:", e);
+  }
+}
+
 // --- State ---
 
 let liveUpdatedStations: Record<number, boolean> = {};
@@ -34,6 +57,10 @@ const trackingBikes: Record<number, TrackingInfo> = {};
 /** In-memory cache of all bikes, synced with DB. Avoids full reload every cycle. */
 let bikeCache: Record<number, PrismaBike> = {};
 let bikeCacheInitialized = false;
+
+/** Daily travel counters (reset every 24h after recap) */
+let dailyTravelsStarted = 0;
+let dailyTravelsCompleted = 0;
 
 // --- Helpers ---
 
@@ -245,12 +272,14 @@ async function updateBikes(): Promise<void> {
   try {
     if (travelInserts.length) {
       await prisma.travel.createMany({ data: travelInserts });
+      dailyTravelsStarted += travelInserts.length;
       console.log(`${travelInserts.length} travels started`);
     }
     if (travelUpdates.length) {
       await prisma.$transaction(
         travelUpdates.map((t) => prisma.travel.update({ where: t.where, data: t.data }))
       );
+      dailyTravelsCompleted += travelUpdates.length;
       console.log(`${travelUpdates.length} travels completed`);
     }
   } catch (error) {
@@ -328,19 +357,53 @@ async function runBikesLoop(): Promise<void> {
   }
 }
 
+async function runDailyRecapLoop(): Promise<void> {
+  const RECAP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+  while (true) {
+    await delay(RECAP_INTERVAL);
+    try {
+      const msg = [
+        `📊 **Vélo'v Tracking — Récap 24h**`,
+        `• Trajets démarrés : **${dailyTravelsStarted}**`,
+        `• Trajets terminés : **${dailyTravelsCompleted}**`,
+        `• Vélos actuellement suivis : **${Object.keys(trackingBikes).length}**`,
+        `_${new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}_`,
+      ].join("\n");
+      await sendDiscordMessage(msg);
+      console.log("Daily recap sent to Discord");
+      dailyTravelsStarted = 0;
+      dailyTravelsCompleted = 0;
+    } catch (e) {
+      console.error("Error sending daily recap:", e);
+    }
+  }
+}
+
 // --- Graceful shutdown ---
 
 let isShuttingDown = false;
-function handleShutdown(signal: string): void {
+async function handleShutdown(signal: string): Promise<void> {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.log(`\nReceived ${signal}, shutting down gracefully...`);
-  prisma.$disconnect().finally(() => process.exit(0));
+  await sendDiscordMessage(
+    `🛑 **Vélo'v Tracking — Arrêt**\nLe script s'est arrêté (signal: \`${signal}\`).\n_${new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}_`
+  );
+  await prisma.$disconnect();
+  process.exit(0);
 }
 process.on("SIGINT", () => handleShutdown("SIGINT"));
 process.on("SIGTERM", () => handleShutdown("SIGTERM"));
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", async (err) => {
+  console.error("Uncaught exception:", err);
+  await sendDiscordMessage(
+    `🔥 **Vélo'v Tracking — Crash**\nErreur fatale : \`${err.message}\`\n_${new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}_`
+  );
+  await prisma.$disconnect();
+  process.exit(1);
 });
 
 // --- Bootstrap ---
@@ -349,6 +412,11 @@ await cleanUnfinishedTravels();
 await updateStations();
 await updateBikes();
 
-// Start both loops concurrently (but each loop is internally sequential)
+// Start all loops concurrently (each loop is internally sequential)
 runStationsLoop();
 runBikesLoop();
+runDailyRecapLoop();
+
+await sendDiscordMessage(
+  `✅ **Vélo'v Tracking — Démarré**\n_${new Date().toLocaleString("fr-FR", { timeZone: "Europe/Paris" })}_`
+);

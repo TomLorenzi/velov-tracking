@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+supabase
+public
+app
+components
+providers
+*.md
+LICENSE
