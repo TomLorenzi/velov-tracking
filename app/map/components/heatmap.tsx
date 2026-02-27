@@ -2,13 +2,14 @@
 
 import {useEffect, useMemo} from 'react';
 import {useMap, useMapsLibrary} from '@vis.gl/react-google-maps';
-import { Station, Travel } from '@prisma/client';
+import { Station } from '@prisma/client';
+import { TravelSummary } from '../actions';
 import { Option } from '@/components/ui/multi-select';
 
 type HeatmapProps = {
     radius: number;
     opacity: number;
-    travels: Travel[];
+    travels: TravelSummary[];
     stations: {
         [key: number]: Station;
     };

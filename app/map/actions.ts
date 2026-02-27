@@ -2,9 +2,11 @@
 
 import { DateRange } from "react-day-picker";
 import prisma from "@/lib/prisma";
-import { unstable_cache } from "next/cache";
 
 const MAX_RANGE_DAYS = 7;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const travelsCache = new Map<string, { data: TravelSummary[]; timestamp: number }>();
 
 function clampDateRange(date: DateRange | undefined): { from: Date; to: Date } {
     const now = new Date();
@@ -35,24 +37,43 @@ function clampDateRange(date: DateRange | undefined): { from: Date; to: Date } {
     return { from, to };
 }
 
-const queryTravels = unstable_cache(
-    async (fromISO: string, toISO: string) => {
-        const from = new Date(fromISO);
-        const to = new Date(toISO);
+export type TravelSummary = {
+    startDateTime: Date;
+    endDateTime: Date | null;
+    stationFromNumber: number;
+    stationToNumber: number | null;
+};
 
-        return prisma.travel.findMany({
-            where: {
-                endDateTime: { not: null },
-                OR: [
-                    { startDateTime: { gte: from, lte: to } },
-                    { endDateTime: { gte: from, lte: to } },
-                ],
-            },
-        });
-    },
-    ["travels-by-date"],
-    { revalidate: 300 } // 5 minutes
-);
+async function queryTravels(fromISO: string, toISO: string): Promise<TravelSummary[]> {
+    const cacheKey = `${fromISO}|${toISO}`;
+    const cached = travelsCache.get(cacheKey);
+
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+    }
+
+    const from = new Date(fromISO);
+    const to = new Date(toISO);
+
+    const data = await prisma.travel.findMany({
+        where: {
+            endDateTime: { not: null },
+            OR: [
+                { startDateTime: { gte: from, lte: to } },
+                { endDateTime: { gte: from, lte: to } },
+            ],
+        },
+        select: {
+            startDateTime: true,
+            endDateTime: true,
+            stationFromNumber: true,
+            stationToNumber: true,
+        },
+    });
+
+    travelsCache.set(cacheKey, { data, timestamp: Date.now() });
+    return data;
+}
 
 export async function fetchTravels(date: DateRange | undefined, formattedTimeRange: { start: Date, end: Date } | undefined) {
     const { from, to } = clampDateRange(date);
@@ -77,19 +98,13 @@ export async function fetchTravels(date: DateRange | undefined, formattedTimeRan
         const startDateTime = new Date(travel.startDateTime);
         const endDateTime = new Date(travel.endDateTime);
 
-        const startHour = startDateTime.getHours();
-        const startMinute = startDateTime.getMinutes();
-        const endHour = endDateTime.getHours();
-        const endMinute = endDateTime.getMinutes();
+        // Convert to minutes since midnight for easier comparison
+        const travelStartMinutes = startDateTime.getHours() * 60 + startDateTime.getMinutes();
+        const travelEndMinutes = endDateTime.getHours() * 60 + endDateTime.getMinutes();
+        const filterStartMinutes = timeFilters.startHour * 60 + timeFilters.startMinute;
+        const filterEndMinutes = timeFilters.endHour * 60 + timeFilters.endMinute;
 
-        const isStartInRange =
-            startHour > timeFilters.startHour ||
-            (startHour === timeFilters.startHour && startMinute >= timeFilters.startMinute);
-
-        const isEndInRange =
-            endHour < timeFilters.endHour ||
-            (endHour === timeFilters.endHour && endMinute <= timeFilters.endMinute);
-
-        return isStartInRange && isEndInRange;
+        // Include travel if it overlaps with the time window
+        return travelStartMinutes <= filterEndMinutes && travelEndMinutes >= filterStartMinutes;
     });
 }

@@ -4,7 +4,8 @@ import { MapProvider } from "@/providers/map-provider";
 import { useEffect, useState } from "react";
 import dynamic from 'next/dynamic';
 const MapComponent = dynamic(() => import('./map'), {ssr: false});
-import { Station, Travel } from "@prisma/client";
+import { Station } from "@prisma/client";
+import { TravelSummary } from "../actions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DateRange } from "react-day-picker";
 import { DatePickerWithRange } from "./datepicker";
@@ -50,7 +51,7 @@ const MapClient = ({ stations }: Props) => {
     const [showHeatmap, setShowHeatmap] = useState(true);
     const [showAllTrips, setShowAllTrips] = useState(false);
     const [timeRangeFilter, setTimeRangeFilter] = useState(false);
-    const [travels, setTravels] = useState<Travel[]>([]);
+    const [travels, setTravels] = useState<TravelSummary[]>([]);
     const [date, setDate] = useState<DateRange | undefined>(getDefaultDateRange());
     const [dateTimeStart, setDateTimeStart] = useState<Date | undefined>(new Date(new Date().setHours(8, 0, 0, 0)));
     const [dateTimeEnd, setDateTimeEnd] = useState<Date | undefined>(new Date(new Date().setHours(10, 0, 0, 0)));

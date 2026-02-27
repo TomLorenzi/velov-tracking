@@ -1,4 +1,5 @@
-import { Station, Travel } from "@prisma/client";
+import { Station } from "@prisma/client";
+import { TravelSummary } from "../actions";
 import { Map } from "@vis.gl/react-google-maps";
 import Heatmap from "./heatmap";
 import { Option } from "@/components/ui/multi-select";
@@ -15,7 +16,7 @@ interface Props {
     stations: {
         [key: number]: Station;
     };
-    travels: Travel[];
+    travels: TravelSummary[];
     showStations: boolean;
     showHeatmap: boolean;
     showAllTrips: boolean;
