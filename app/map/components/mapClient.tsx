@@ -1,7 +1,7 @@
 'use client'
 
 import { MapProvider } from "@/providers/map-provider";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from 'next/dynamic';
 const MapComponent = dynamic(() => import('./map'), {ssr: false});
 import { Station } from "@prisma/client";
@@ -58,18 +58,33 @@ const MapClient = ({ stations }: Props) => {
     const [stationSelectedNumber, setStationSelectedNumber] = useState<number | null>(null);
 
     const [formattedTimeRange, setFormattedTimeRange] = useState<{start: Date, end: Date} | undefined>(undefined);
+    const timeRangeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        if (!timeRangeFilter || !dateTimeStart || !dateTimeEnd) {
-            return setFormattedTimeRange(undefined);
+        if (timeRangeDebounceRef.current) {
+            clearTimeout(timeRangeDebounceRef.current);
         }
-        const start = new Date(dateTimeStart);
-        const end = new Date(dateTimeEnd);
-        start.setSeconds(0);
-        end.setSeconds(59);
-        start.setMilliseconds(0);
-        end.setMilliseconds(999);
-        setFormattedTimeRange({ start, end });
+
+        if (!timeRangeFilter || !dateTimeStart || !dateTimeEnd) {
+            setFormattedTimeRange(undefined);
+            return;
+        }
+
+        timeRangeDebounceRef.current = setTimeout(() => {
+            const start = new Date(dateTimeStart);
+            const end = new Date(dateTimeEnd);
+            start.setSeconds(0);
+            end.setSeconds(59);
+            start.setMilliseconds(0);
+            end.setMilliseconds(999);
+            setFormattedTimeRange({ start, end });
+        }, 500);
+
+        return () => {
+            if (timeRangeDebounceRef.current) {
+                clearTimeout(timeRangeDebounceRef.current);
+            }
+        };
     }, [timeRangeFilter, dateTimeStart, dateTimeEnd]);
 
     useEffect(() => {

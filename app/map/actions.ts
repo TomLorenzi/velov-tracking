@@ -5,33 +5,72 @@ import prisma from "@/lib/prisma";
 
 const MAX_RANGE_DAYS = 7;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const TIMEZONE = 'Europe/Paris';
 
 const travelsCache = new Map<string, { data: TravelSummary[]; timestamp: number }>();
+
+/** Extract hours and minutes in Europe/Paris timezone regardless of server TZ */
+function getParisHoursMinutes(date: Date): { hours: number; minutes: number } {
+    const parts = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: TIMEZONE,
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false,
+    }).formatToParts(date);
+
+    const hours = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10);
+    const minutes = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
+    return { hours, minutes };
+}
+
+/** Get the start of the day in Paris timezone */
+function startOfDayParis(date: Date): Date {
+    const paris = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: TIMEZONE,
+        year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(date);
+
+    const year = paris.find(p => p.type === 'year')?.value;
+    const month = paris.find(p => p.type === 'month')?.value;
+    const day = paris.find(p => p.type === 'day')?.value;
+
+    // Create midnight in Paris: "YYYY-MM-DDT00:00:00" interpreted in Paris TZ
+    // Using a well-known offset calculation
+    const midnightParis = new Date(`${year}-${month}-${day}T00:00:00`);
+    // Compute the offset for this specific date in Paris (handles DST)
+    const offsetMs = midnightParis.getTime() - new Date(
+        midnightParis.toLocaleString('en-US', { timeZone: TIMEZONE })
+    ).getTime();
+    return new Date(midnightParis.getTime() + offsetMs);
+}
+
+/** Get the end of the day in Paris timezone */
+function endOfDayParis(date: Date): Date {
+    const start = startOfDayParis(date);
+    return new Date(start.getTime() + 24 * 60 * 60 * 1000 - 1);
+}
 
 function clampDateRange(date: DateRange | undefined): { from: Date; to: Date } {
     const now = new Date();
     const defaultFrom = new Date(now);
     defaultFrom.setDate(defaultFrom.getDate() - (MAX_RANGE_DAYS - 1));
-    defaultFrom.setHours(0, 0, 0, 0);
-    const defaultTo = new Date(now);
-    defaultTo.setHours(23, 59, 59, 999);
+    const from_default = startOfDayParis(defaultFrom);
+    const to_default = endOfDayParis(now);
 
     if (!date?.from) {
-        return { from: defaultFrom, to: defaultTo };
+        return { from: from_default, to: to_default };
     }
 
-    const from = new Date(date.from);
-    from.setHours(0, 0, 0, 0);
+    const from = startOfDayParis(new Date(date.from));
 
-    let to = date.to ? new Date(date.to) : new Date(from);
-    to.setHours(23, 59, 59, 999);
+    let to = date.to ? endOfDayParis(new Date(date.to)) : endOfDayParis(new Date(date.from));
 
     // Clamp to max range
     const maxTo = new Date(from);
     maxTo.setDate(maxTo.getDate() + MAX_RANGE_DAYS - 1);
-    maxTo.setHours(23, 59, 59, 999);
-    if (to > maxTo) {
-        to = maxTo;
+    const maxToEnd = endOfDayParis(maxTo);
+    if (to > maxToEnd) {
+        to = maxToEnd;
     }
 
     return { from, to };
@@ -85,12 +124,12 @@ export async function fetchTravels(date: DateRange | undefined, formattedTimeRan
         return listTravels;
     }
 
-    const timeFilters = {
-        startHour: formattedTimeRange.start.getHours(),
-        startMinute: formattedTimeRange.start.getMinutes(),
-        endHour: formattedTimeRange.end.getHours(),
-        endMinute: formattedTimeRange.end.getMinutes(),
-    };
+    const startDate = new Date(formattedTimeRange.start);
+    const endDate = new Date(formattedTimeRange.end);
+    const startParis = getParisHoursMinutes(startDate);
+    const endParis = getParisHoursMinutes(endDate);
+    const filterStartMinutes = startParis.hours * 60 + startParis.minutes;
+    const filterEndMinutes = endParis.hours * 60 + endParis.minutes;
 
     return listTravels.filter(travel => {
         if (!travel.endDateTime) return false;
@@ -98,12 +137,11 @@ export async function fetchTravels(date: DateRange | undefined, formattedTimeRan
         const startDateTime = new Date(travel.startDateTime);
         const endDateTime = new Date(travel.endDateTime);
 
-        // Convert to minutes since midnight for easier comparison
-        const travelStartMinutes = startDateTime.getHours() * 60 + startDateTime.getMinutes();
-        const travelEndMinutes = endDateTime.getHours() * 60 + endDateTime.getMinutes();
-        const filterStartMinutes = timeFilters.startHour * 60 + timeFilters.startMinute;
-        const filterEndMinutes = timeFilters.endHour * 60 + timeFilters.endMinute;
-
+        // Convert to minutes since midnight in Paris timezone
+        const travelStart = getParisHoursMinutes(startDateTime);
+        const travelEnd = getParisHoursMinutes(endDateTime);
+        const travelStartMinutes = travelStart.hours * 60 + travelStart.minutes;
+        const travelEndMinutes = travelEnd.hours * 60 + travelEnd.minutes;
         // Include travel if it overlaps with the time window
         return travelStartMinutes <= filterEndMinutes && travelEndMinutes >= filterStartMinutes;
     });
