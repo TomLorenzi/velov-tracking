@@ -9,14 +9,24 @@ const TIMEZONE = 'Europe/Paris';
 
 const travelsCache = new Map<string, { data: TravelSummary[]; timestamp: number }>();
 
+/** Reusable formatters – created once, used many times */
+const parisTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: TIMEZONE,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+});
+
+const parisDateFormatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+});
+
 /** Extract hours and minutes in Europe/Paris timezone regardless of server TZ */
 function getParisHoursMinutes(date: Date): { hours: number; minutes: number } {
-    const parts = new Intl.DateTimeFormat('fr-FR', {
-        timeZone: TIMEZONE,
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: false,
-    }).formatToParts(date);
+    const parts = parisTimeFormatter.formatToParts(date);
 
     const hours = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10);
     const minutes = parseInt(parts.find(p => p.type === 'minute')?.value ?? '0', 10);
@@ -25,10 +35,7 @@ function getParisHoursMinutes(date: Date): { hours: number; minutes: number } {
 
 /** Get the start of the day in Paris timezone */
 function startOfDayParis(date: Date): Date {
-    const paris = new Intl.DateTimeFormat('fr-FR', {
-        timeZone: TIMEZONE,
-        year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(date);
+    const paris = parisDateFormatter.formatToParts(date);
 
     const year = paris.find(p => p.type === 'year')?.value;
     const month = paris.find(p => p.type === 'month')?.value;
