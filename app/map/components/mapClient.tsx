@@ -1,7 +1,7 @@
 'use client'
 
 import { MapProvider } from "@/providers/map-provider";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from 'next/dynamic';
 const MapComponent = dynamic(() => import('./map'), {ssr: false});
 import { Station } from "@prisma/client";
