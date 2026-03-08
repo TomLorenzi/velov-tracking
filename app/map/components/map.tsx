@@ -12,6 +12,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DECK_STYLE = {width: '100%', height: '100%', position: 'absolute' as const, inset: '0'};
 
+interface ParsedCoords {
+    lat: number;
+    lng: number;
+}
+
 interface Props {
     stations: {
         [key: number]: Station;
@@ -66,6 +71,16 @@ export default function MapComponent({
         };
     }, []);
 
+    // Pre-compute station coordinates once to avoid repeated split/parseFloat
+    const stationCoords = useMemo(() => {
+        const coords: Record<number, ParsedCoords> = {};
+        for (const key in stations) {
+            const [lat, lng] = stations[key].position.split(',').map(parseFloat);
+            coords[key] = { lat, lng };
+        }
+        return coords;
+    }, [stations]);
+
     const tripsData = useMemo(() => {
         if (!showAllTrips && selectedStationNumber === null) return [];
 
@@ -88,18 +103,16 @@ export default function MapComponent({
 
         const data: { path: [number, number][]; timestamps: number[]; count: number; maxCount: number }[] = [];
         for (const route of routes) {
-            const startStation = stations[route.from];
-            const endStation = stations[route.to];
-            if (!startStation || !endStation) continue;
-            const [startLat, startLng] = startStation.position.split(',').map(parseFloat);
-            const [endLat, endLng] = endStation.position.split(',').map(parseFloat);
-            const midLng = (startLng + endLng) / 2;
-            const midLat = (startLat + endLat) / 2;
+            const startCoord = stationCoords[route.from];
+            const endCoord = stationCoords[route.to];
+            if (!startCoord || !endCoord) continue;
+            const midLng = (startCoord.lng + endCoord.lng) / 2;
+            const midLat = (startCoord.lat + endCoord.lat) / 2;
             data.push({
                 path: [
-                    [startLng, startLat],
+                    [startCoord.lng, startCoord.lat],
                     [midLng, midLat],
-                    [endLng, endLat],
+                    [endCoord.lng, endCoord.lat],
                 ],
                 timestamps: [0, 50, 100],
                 count: route.count,
@@ -107,7 +120,7 @@ export default function MapComponent({
             });
         }
         return data;
-    }, [selectedStationNumber, showAllTrips, travels, stations]);
+    }, [selectedStationNumber, showAllTrips, travels, stationCoords]);
 
     // Animation loop for TripsLayer
     const [currentTime, setCurrentTime] = useState(0);
@@ -169,7 +182,10 @@ export default function MapComponent({
             const stationLayer = new IconLayer({
                 id: 'IconLayer',
                 data: Object.values(stations),
-                getPosition: (d: Station) => [parseFloat(d.position.split(',')[1]), parseFloat(d.position.split(',')[0])],
+                getPosition: (d: Station) => {
+                    const c = stationCoords[d.number];
+                    return c ? [c.lng, c.lat] : [0, 0];
+                },
                 getIcon: () => ({
                     url: './map/pin.svg',
                     width: 64,
@@ -182,7 +198,7 @@ export default function MapComponent({
         }
 
         return result;
-    }, [stations, tripsData, showStations, currentTime, showAllTrips]);
+    }, [stations, stationCoords, tripsData, showStations, currentTime, showAllTrips]);
 
     if (!deckReady) {
         return <div style={DECK_STYLE} />;

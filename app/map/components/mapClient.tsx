@@ -15,7 +15,7 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { X, Layers, Clock, MapPin, Flame, Home, Route } from "lucide-react";
 import Link from "next/link";
 
-const MAX_RANGE_DAYS = 7;
+const MAX_RANGE_DAYS = 2;
 
 function getDefaultDateRange(): DateRange {
     const now = new Date();
