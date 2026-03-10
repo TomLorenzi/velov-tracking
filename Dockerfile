@@ -15,5 +15,6 @@ COPY class ./class
 COPY lib ./lib
 COPY types ./types
 COPY tsconfig.json ./
+COPY .env ./
 
 CMD ["npx", "tsx", "index.ts"]
