@@ -1,7 +1,12 @@
 import dotenv from "dotenv";
 dotenv.config();
+// The daemon is a long-running process — use the direct DB connection
+// to avoid connection pooler (PgBouncer) overhead and reduce egress.
+if (process.env.DIRECT_URL) {
+  process.env.DATABASE_URL = process.env.DIRECT_URL;
+}
 import requestHandler from "./class/RequestHandler";
-import { Bike as PrismaBike, Station, Travel } from "@prisma/client";
+import { Bike as PrismaBike, Prisma, Station } from "@prisma/client";
 import prisma from "./lib/prisma";
 import { Bike as ApiBike } from "./types/bike";
 
@@ -25,6 +30,8 @@ interface TravelInsert {
 interface TravelUpdate {
   where: { id: string };
   data: { stationToNumber: number; endDateTime: Date };
+  bikeNumber: number;
+  originalStationNumber: number;
 }
 
 // --- Discord webhook ---
@@ -57,6 +64,14 @@ const trackingBikes: Record<number, TrackingInfo> = {};
 /** In-memory cache of all bikes, synced with DB. Avoids full reload every cycle. */
 let bikeCache: Record<number, PrismaBike> = {};
 let bikeCacheInitialized = false;
+
+/** In-memory cache of unfinished travels, indexed by bike number. Avoids querying DB every cycle. */
+interface CachedTravel {
+  id: string;
+  startDateTime: Date;
+}
+const unfinishedTravelCache: Record<number, CachedTravel> = {};
+let travelCacheInitialized = false;
 
 /** Daily travel counters (reset every 24h after recap) */
 let dailyTravelsStarted = 0;
@@ -152,6 +167,19 @@ async function ensureBikeCacheLoaded(): Promise<void> {
   console.log(`Bike cache initialized with ${storedBikes.length} bikes`);
 }
 
+async function ensureTravelCacheLoaded(): Promise<void> {
+  if (travelCacheInitialized) return;
+  const unfinished = await prisma.travel.findMany({
+    where: { stationToNumber: null },
+    select: { id: true, bikeNumber: true, startDateTime: true },
+  });
+  for (const t of unfinished) {
+    unfinishedTravelCache[t.bikeNumber] = { id: t.id, startDateTime: t.startDateTime };
+  }
+  travelCacheInitialized = true;
+  console.log(`Travel cache initialized with ${unfinished.length} unfinished travels`);
+}
+
 async function updateBikes(): Promise<void> {
   let liveBikes: ApiBike[];
   try {
@@ -170,21 +198,18 @@ async function updateBikes(): Promise<void> {
   }
 
   await ensureBikeCacheLoaded();
+  await ensureTravelCacheLoaded();
 
-  // Pre-load all unfinished travels to avoid N+1 queries in updateTravel
-  const unfinishedTravels = await prisma.travel.findMany({
-    where: { stationToNumber: null },
-  });
-  const unfinishedTravelsByBike: Record<number, Travel> = {};
+  // Clean stale unfinished travels (>6h) from cache
   const now = new Date();
   const MAX_TRAVEL_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
   const staleIds: string[] = [];
-  for (const travel of unfinishedTravels) {
+  for (const [bikeNumberStr, travel] of Object.entries(unfinishedTravelCache)) {
     if (now.getTime() - travel.startDateTime.getTime() > MAX_TRAVEL_DURATION_MS) {
+      const bikeNumber = Number(bikeNumberStr);
       staleIds.push(travel.id);
-      delete trackingBikes[travel.bikeNumber];
-    } else {
-      unfinishedTravelsByBike[travel.bikeNumber] = travel;
+      delete trackingBikes[bikeNumber];
+      delete unfinishedTravelCache[bikeNumber];
     }
   }
   if (staleIds.length) {
@@ -210,7 +235,7 @@ async function updateBikes(): Promise<void> {
       if (bike.status === "RENTED" || bike.stationNumber === undefined) {
         continue;
       }
-      endTravel(bike.stationNumber, bikeCache[bike.number], unfinishedTravelsByBike, travelUpdates);
+      endTravel(bike.stationNumber, bikeCache[bike.number], travelUpdates);
     }
 
     if (bikeCache[bike.number] !== undefined) {
@@ -240,9 +265,14 @@ async function updateBikes(): Promise<void> {
   try {
     if (bikesToUpdate.length) {
       console.log(`${bikesToUpdate.length} bikes have changed location`);
-      await prisma.$transaction(
-        bikesToUpdate.map((b) => prisma.bike.update({ where: b.where, data: b.data }))
+      const bikeValues = bikesToUpdate.map(
+        (b) => Prisma.sql`(${b.where.number}, ${b.data.stationNumber})`
       );
+      await prisma.$executeRaw`
+        UPDATE "Bike" SET "stationNumber" = v.s::int
+        FROM (VALUES ${Prisma.join(bikeValues)}) AS v(n, s)
+        WHERE "Bike"."number" = v.n::int
+      `;
       // Sync cache
       for (const b of bikesToUpdate) {
         if (bikeCache[b.where.number]) {
@@ -253,12 +283,14 @@ async function updateBikes(): Promise<void> {
     if (bikesToInsert.length) {
       await prisma.bike.createMany({ data: bikesToInsert });
       console.log(`${bikesToInsert.length} new bikes inserted`);
-      // Sync cache with newly inserted bikes
-      const newBikes = await prisma.bike.findMany({
-        where: { number: { in: bikesToInsert.map((b) => b.number) } },
-      });
-      for (const bike of newBikes) {
-        bikeCache[bike.number] = bike;
+      // Sync cache directly from insert data (avoids re-querying DB)
+      for (const bike of bikesToInsert) {
+        bikeCache[bike.number] = {
+          number: bike.number,
+          type: bike.type,
+          status: null,
+          stationNumber: bike.stationNumber,
+        };
       }
     }
   } catch (error) {
@@ -268,23 +300,47 @@ async function updateBikes(): Promise<void> {
 
   console.log("Bikes updated");
 
-  // --- Persist travel changes ---
+  // --- Persist travel starts ---
   try {
     if (travelInserts.length) {
-      await prisma.travel.createMany({ data: travelInserts });
-      dailyTravelsStarted += travelInserts.length;
-      console.log(`${travelInserts.length} travels started`);
+      const created = await prisma.travel.createManyAndReturn({
+        data: travelInserts,
+        select: { id: true, bikeNumber: true, stationFromNumber: true, startDateTime: true },
+      });
+      for (const t of created) {
+        trackingBikes[t.bikeNumber] = { stationNumber: t.stationFromNumber };
+        unfinishedTravelCache[t.bikeNumber] = { id: t.id, startDateTime: t.startDateTime };
+      }
+      dailyTravelsStarted += created.length;
+      console.log(`${created.length} travels started`);
     }
+  } catch (error) {
+    console.error("Error inserting travels:", error);
+  }
+
+  // --- Persist travel completions ---
+  try {
     if (travelUpdates.length) {
-      await prisma.$transaction(
-        travelUpdates.map((t) => prisma.travel.update({ where: t.where, data: t.data }))
+      const travelValues = travelUpdates.map(
+        (t) => Prisma.sql`(${t.where.id}, ${t.data.stationToNumber}, ${t.data.endDateTime})`
       );
+      await prisma.$executeRaw`
+        UPDATE "Travel" SET "stationToNumber" = v.s::int, "endDateTime" = v.e::timestamptz
+        FROM (VALUES ${Prisma.join(travelValues)}) AS v(i, s, e)
+        WHERE "Travel"."id" = v.i
+      `;
+      for (const t of travelUpdates) {
+        delete unfinishedTravelCache[t.bikeNumber];
+      }
       dailyTravelsCompleted += travelUpdates.length;
       console.log(`${travelUpdates.length} travels completed`);
     }
   } catch (error) {
-    console.error("Error updating travels:", error);
-    return;
+    // Restore tracking for bikes whose travel completion failed
+    for (const t of travelUpdates) {
+      trackingBikes[t.bikeNumber] = { stationNumber: t.originalStationNumber };
+    }
+    console.error("Error completing travels:", error);
   }
 }
 
@@ -296,13 +352,12 @@ function startTravel(bike: PrismaBike, travelInserts: TravelInsert[]): void {
     bikeNumber: bike.number,
     startDateTime: new Date(),
   });
-  trackingBikes[bike.number] = { stationNumber: bike.stationNumber };
+  // trackingBikes is updated after successful DB insert to ensure consistency
 }
 
 function endTravel(
   endStationNumber: number,
   bike: PrismaBike | undefined,
-  unfinishedTravelsByBike: Record<number, Travel>,
   travelUpdates: TravelUpdate[]
 ): void {
   if (!bike) return;
@@ -310,12 +365,18 @@ function endTravel(
   const currentTracking = trackingBikes[bike.number];
   if (currentTracking === undefined) return;
 
-  const storedTravel = unfinishedTravelsByBike[bike.number];
-  if (!storedTravel) return;
+  const cachedTravel = unfinishedTravelCache[bike.number];
+  if (!cachedTravel) {
+    // No matching travel in DB — clean up stale tracking entry
+    delete trackingBikes[bike.number];
+    return;
+  }
 
   travelUpdates.push({
-    where: { id: storedTravel.id },
+    where: { id: cachedTravel.id },
     data: { stationToNumber: endStationNumber, endDateTime: new Date() },
+    bikeNumber: bike.number,
+    originalStationNumber: currentTracking.stationNumber,
   });
   delete trackingBikes[bike.number];
 }
@@ -328,6 +389,10 @@ async function cleanUnfinishedTravels(): Promise<void> {
   });
   if (deleted.count > 0) {
     console.log(`Cleaned ${deleted.count} unfinished travels`);
+  }
+  // Clear travel cache since all unfinished travels were deleted
+  for (const key of Object.keys(unfinishedTravelCache)) {
+    delete unfinishedTravelCache[Number(key)];
   }
 }
 
