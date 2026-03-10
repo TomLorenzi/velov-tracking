@@ -26,5 +26,5 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ```
 docker build -t velov-tracking .
-docker run -d --env-file .env velov-tracking
+docker run -d velov-tracking
 ```
