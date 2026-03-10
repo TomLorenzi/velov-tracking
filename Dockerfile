@@ -2,13 +2,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Copy Prisma schema (needed by postinstall: prisma generate)
+COPY prisma ./prisma
+
 # Install dependencies + tsx
 COPY package.json package-lock.json* ./
 RUN npm install && npm install --save-dev tsx
-
-# Copy Prisma schema and generate client
-COPY prisma ./prisma
-RUN npx prisma generate
 
 # Copy source files
 COPY index.ts ./
