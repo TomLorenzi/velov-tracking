@@ -24,5 +24,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## To run the script :
 
+```
 docker build -t velov-tracking .
 docker run -d --env-file .env velov-tracking
+```
