@@ -1,13 +1,14 @@
 import { Station } from "@prisma/client";
 import { TravelSummary } from "../actions";
 import { Map } from "@vis.gl/react-google-maps";
-import Heatmap from "./heatmap";
+import { computeHeatmapPoints, HeatmapPoint } from "./heatmap";
 import { Option } from "@/components/ui/multi-select";
 import {DeckGL} from '@deck.gl/react';
 import {limitTiltRange} from '@vis.gl/react-google-maps';
 import { MapViewState, PickingInfo } from "@deck.gl/core";
 import {IconLayer} from '@deck.gl/layers';
 import {TripsLayer} from '@deck.gl/geo-layers';
+import {HeatmapLayer} from '@deck.gl/aggregation-layers';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const DECK_STYLE = {width: '100%', height: '100%', position: 'absolute' as const, inset: '0'};
@@ -80,6 +81,11 @@ export default function MapComponent({
         }
         return coords;
     }, [stations]);
+
+    const heatmapData = useMemo(() => {
+        if (!showHeatmap) return [];
+        return computeHeatmapPoints(travels, stationCoords, stationFilters);
+    }, [showHeatmap, travels, stationCoords, stationFilters]);
 
     const tripsData = useMemo(() => {
         if (!showAllTrips && selectedStationNumber === null) return [];
@@ -156,6 +162,19 @@ export default function MapComponent({
     const layers = useMemo(() => {
         const result = [];
 
+        // Pushed first so it renders below trips and stations
+        if (showHeatmap) {
+            const heatmapLayer = new HeatmapLayer<HeatmapPoint>({
+                id: 'HeatmapLayer',
+                data: heatmapData,
+                getPosition: (d) => d.position,
+                getWeight: (d) => d.weight,
+                radiusPixels: 30,
+                opacity: 0.6,
+            });
+            result.push(heatmapLayer);
+        }
+
         const tripsLayer = new TripsLayer({
             id: 'TripsLayer',
             data: tripsData,
@@ -198,7 +217,7 @@ export default function MapComponent({
         }
 
         return result;
-    }, [stations, stationCoords, tripsData, showStations, currentTime, showAllTrips]);
+    }, [stations, stationCoords, tripsData, showStations, currentTime, showAllTrips, showHeatmap, heatmapData]);
 
     if (!deckReady) {
         return <div style={DECK_STYLE} />;
@@ -219,11 +238,7 @@ export default function MapComponent({
                 defaultZoom={14}
                 defaultCenter={{ lat: 45.767736, lng: 4.832114 }}
                 mapId={process.env.NEXT_PUBLIC_GOOGLE_MAP_ID}
-            >
-                {showHeatmap && (
-                    <Heatmap radius={30} opacity={0.6} travels={travels} stations={stations} stationFilters={stationFilters} />
-                )}
-            </Map>
+            />
         </DeckGL>
     )
 };
