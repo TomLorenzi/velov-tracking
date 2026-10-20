@@ -133,7 +133,8 @@ CLICLOCITY_API_KEY=                # Cyclocity client key (bikes)
 DISCORD_WEBHOOK_URL=               # Optional: start/stop/crash/daily-recap notifications
 
 # Statistics endpoint
-CRON_SECRET=                       # Optional: if set, /api/statistics/recompute requires ?token=<CRON_SECRET>
+CRON_SECRET=                       # Optional: if set, /api/statistics/recompute requires
+                                   # "Authorization: Bearer <CRON_SECRET>" (sent by Vercel cron) or ?token=<CRON_SECRET>
 ```
 
 ### Install and run the web app
@@ -183,7 +184,7 @@ docker run -d --name velov-tracking --restart unless-stopped velov-tracking
 
 ## Deployment
 
-- **Web app**: Vercel. The build runs `prisma migrate deploy`, so migrations go out with each deploy. `vercel.json` schedules `GET /api/statistics/recompute` daily at 01:00 UTC.
+- **Web app**: Vercel. The build runs `prisma migrate deploy`, so migrations go out with each deploy. `vercel.json` schedules `GET /api/statistics/recompute` daily at 01:00 UTC. Set `CRON_SECRET` in the Vercel project: Vercel then sends it as a Bearer token with each cron call, and the endpoint rejects anyone without it.
 - **Tracker daemon**: any host that can run a long-lived Docker container. It must keep running all the time, otherwise trips are missed.
 - **Database**: Supabase Postgres. The web app uses the pooled `DATABASE_URL`; the daemon and migrations use `DIRECT_URL`.
 

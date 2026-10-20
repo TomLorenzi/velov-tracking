@@ -246,9 +246,11 @@ async function computeStatistics() {
 }
 
 export async function GET(request: Request) {
-    // Optional: protect with a secret token
+    // Optional: protect with a secret token.
+    // Vercel cron sends it as "Authorization: Bearer <CRON_SECRET>"; ?token= is kept for manual calls.
     const { searchParams } = new URL(request.url);
-    const token = searchParams.get("token");
+    const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+    const token = bearer || searchParams.get("token");
     if (process.env.CRON_SECRET && token !== process.env.CRON_SECRET) {
         return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
